@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../../lib/auth";
 import { api } from "../../../lib/api";
+import EmojiPicker from "emoji-picker-react";
 import { getSocket } from "../../../lib/socket";
 
 function AutoGrowTextarea({ value, onChange, placeholder, onSend }) {
@@ -73,6 +74,26 @@ function DayDivider({ label }) {
 
 function Message({ mine, text, time, compact, tail }) {
   const containerGap = compact ? "-mt-1" : "mt-2";
+  // detect emoji-only
+  const clean = (text || '').trim();
+  const emojiMatches = clean.match(/\p{Extended_Pictographic}/gu) || [];
+  const isEmojiOnly = clean.length > 0 && emojiMatches.length > 0 && clean.replace(/\p{Extended_Pictographic}|\p{Emoji_Component}|\u200D|\uFE0F/gu, '').trim().length === 0;
+  const emojiCount = emojiMatches.length;
+
+  if (isEmojiOnly) {
+    const sizeClass = emojiCount <= 3 ? 'text-5xl' : 'text-2xl';
+    return (
+      <div className={`w-full flex ${mine ? 'justify-end' : 'justify-start'} ${containerGap}`}>
+        <div className={`relative max-w-[76%] px-1 py-1 ${mine ? 'msg-in-right' : 'msg-in-left'}`}>
+          <div className={`leading-none ${sizeClass}`} style={{ lineHeight: 1 }}>
+            {clean}
+          </div>
+          {!!time && <div className={`text-[10px] mt-1 ${mine ? 'text-gray-500' : 'text-gray-500'}`}>{time}</div>}
+        </div>
+      </div>
+    );
+  }
+
   const baseBubble = "max-w-[76%] rounded-2xl px-3 py-2 text-[14px] leading-relaxed";
   const shadow = compact ? "shadow-none" : mine ? "shadow-[0_6px_18px_rgba(0,0,0,0.10)]" : "shadow-[0_4px_14px_rgba(0,0,0,0.08)]";
   const colors = mine ? "bg-[#FFC93A] text-black msg-in-right" : "bg-white msg-in-left";
@@ -108,10 +129,24 @@ export default function ConversationPage({ params }) {
   const scrollRef = useRef(null);
   const [atBottom, setAtBottom] = useState(true);
   const [headerElevated, setHeaderElevated] = useState(false);
+  const [showEmojis, setShowEmojis] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [user, loading, router]);
+
+  // Detect coarse pointer devices (mobile) to hide emoji picker button
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(pointer: coarse)');
+    const handler = () => setIsMobile(!!mq.matches);
+    handler();
+    mq.addEventListener ? mq.addEventListener('change', handler) : mq.addListener(handler);
+    return () => {
+      mq.removeEventListener ? mq.removeEventListener('change', handler) : mq.removeListener(handler);
+    };
+  }, []);
 
   // Fetch history
   useEffect(() => {
@@ -276,6 +311,29 @@ export default function ConversationPage({ params }) {
         onSubmit={(e) => { e.preventDefault(); send(); }}
         className="sticky bottom-0 z-10 p-2.5 flex items-center gap-2 bg-white/95 backdrop-blur shadow-[0_-4px_16px_rgba(0,0,0,0.06)]"
       >
+        {/* Desktop-only Emoji button */}
+        {!isMobile && (
+          <div className="relative">
+            <button type="button" onClick={() => setShowEmojis((v) => !v)} className="size-9 grid place-items-center rounded-full hover:bg-gray-50" aria-label="Emoji picker">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 20a8 8 0 100-16 8 8 0 000 16zm-3-6s1 2 3 2 3-2 3-2M9 9h.01M15 9h.01"/></svg>
+            </button>
+            {showEmojis && (
+              <div className="absolute bottom-12 left-0 z-20 w-[300px] bg-white border rounded-xl shadow-lg overflow-hidden" onMouseLeave={() => setShowEmojis(false)}>
+                <EmojiPicker
+                  onEmojiClick={(emojiData) => { setInput((prev) => `${prev}${emojiData.emoji}`); }}
+                  autoFocusSearch={false}
+                  searchDisabled
+                  skinTonesDisabled
+                  lazyLoadEmojis
+                  width={300}
+                  height={360}
+                  previewConfig={{ showPreview: false }}
+                  theme="light"
+                />
+              </div>
+            )}
+          </div>
+        )}
         <button type="button" className="size-9 grid place-items-center rounded-full hover:bg-gray-50" aria-label="Attach">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M21.44 11.05l-8.49 8.49a3.5 3.5 0 114.95 4.95l-8.49 8.49a1.5 1.5 0 11-2.12-2.12l7.78-7.78"/></svg>
         </button>
