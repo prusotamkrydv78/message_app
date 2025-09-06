@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../lib/auth";
 import Link from "next/link";
 import { api } from "../../lib/api";
+import FAB from "../../components/ui/fab";
 
 function TopBar({ onLogout }) {
   const { user } = useAuth();
@@ -37,9 +38,6 @@ export default function ChatPage() {
     if (!loading && !user) router.replace("/login");
   }, [user, loading, router]);
 
-  if (loading) return <div className="flex-1 grid place-items-center">Loading...</div>;
-  if (!user) return null;
-
   useEffect(() => {
     let abort = false;
     (async () => {
@@ -58,6 +56,9 @@ export default function ChatPage() {
       abort = true;
     };
   }, [accessToken]);
+
+  if (loading) return <div className="flex-1 grid place-items-center">Loading...</div>;
+  if (!user) return null;
 
   return (
     <div className="flex-1 flex flex-col">
@@ -107,14 +108,8 @@ export default function ChatPage() {
       </main>
 
       {/* Floating Action Button to start new conversation */}
-      <Link
-        href="/chat/new"
-        className="fixed md:absolute bottom-5 right-5 inline-flex items-center justify-center rounded-full bg-black text-white size-14 shadow-lg active:scale-95"
-        aria-label="Start new chat"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="size-6">
-          <path d="M12 5a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H6a1 1 0 110-2h5V6a1 1 0 011-1z" />
-        </svg>
+      <Link href="/chat/new" aria-label="Start new chat">
+        <FAB />
       </Link>
     </div>
   );

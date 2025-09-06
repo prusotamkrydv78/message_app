@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
+import Card from "../../../components/ui/card";
+import Input from "../../../components/ui/input";
+import Button from "../../../components/ui/button";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -31,70 +34,57 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex-1 p-4 sm:p-6">
-      <div className="max-w-sm mx-auto">
-        <h1 className="text-2xl font-semibold mb-2">Create account</h1>
-        <p className="text-sm text-gray-500 mb-6">Join ChatX to start messaging</p>
+    <div className="flex-1 grid place-items-center py-8">
+      <Card className="w-full max-w-md p-6">
+        <div className="mb-6 text-center">
+          <div className="mx-auto size-10 rounded-lg bg-black mb-2" />
+          <h1 className="text-2xl font-semibold">Create account</h1>
+          <p className="text-sm text-gray-500">Join ChatX to start messaging</p>
+        </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm mb-1">Name</label>
-            <input
+          <Input
+            label="Name"
+            type="text"
+            placeholder="Your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <div className="grid grid-cols-[110px_1fr] gap-3">
+            <Input
+              label="Code"
               type="text"
-              placeholder="Your name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full border rounded-md px-3 py-2 bg-transparent"
+              value={countryCode}
+              onChange={(e) => setCountryCode(e.target.value)}
             />
-          </div>
-          <div className="grid grid-cols-[96px_1fr] gap-3">
-            <div>
-              <label className="block text-sm mb-1">Code</label>
-              <input
-                type="text"
-                value={countryCode}
-                onChange={(e) => setCountryCode(e.target.value)}
-                className="w-full border rounded-md px-3 py-2 bg-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm mb-1">Phone number</label>
-              <input
-                type="tel"
-                inputMode="numeric"
-                placeholder="e.g. 9800000000"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                className="w-full border rounded-md px-3 py-2 bg-transparent"
-                required
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Password</label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full border rounded-md px-3 py-2 bg-transparent"
+            <Input
+              label="Phone number"
+              type="tel"
+              inputMode="numeric"
+              placeholder="e.g. 9800000000"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
               required
             />
           </div>
+          <Input
+            label="Password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
           {error && <p className="text-sm text-red-500">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full h-11 rounded-md bg-black text-white disabled:opacity-60"
-          >
+          <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Creating..." : "Create account"}
-          </button>
+          </Button>
         </form>
 
         <p className="text-sm text-gray-500 mt-4 text-center">
           Already have an account? <Link className="underline" href="/login">Sign in</Link>
         </p>
-      </div>
+      </Card>
     </div>
   );
 }
