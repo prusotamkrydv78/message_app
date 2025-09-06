@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../../lib/auth";
@@ -9,12 +9,14 @@ import BottomNav from "../../../components/ui/bottom-nav";
 export default function NewChatPage() {
   const router = useRouter();
   const { user, loading, accessToken } = useAuth();
-  const [q, setQ] = useState("");
-  const [users, setUsers] = useState([]);
-  const [fetching, setFetching] = useState(false);
   const listRef = useRef(null);
   const [headerElevated, setHeaderElevated] = useState(false);
-  
+  const [countryCode, setCountryCode] = useState("+977");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
   // track scroll to add subtle shadow to header (must be before any early returns)
   useEffect(() => {
     const el = listRef.current;
@@ -29,40 +31,24 @@ export default function NewChatPage() {
     if (!loading && !user) router.replace("/login");
   }, [user, loading, router]);
 
-  // Fetch users from backend (excluding current user)
-  useEffect(() => {
-    let abort = false;
-    (async () => {
-      if (!accessToken) return;
-      setFetching(true);
-      try {
-        const res = await api.users(accessToken, q);
-        if (!abort) setUsers(res.users || []);
-      } catch (e) {
-        if (!abort) setUsers([]);
-      } finally {
-        if (!abort) setFetching(false);
-      }
-    })();
-    return () => { abort = true; };
-  }, [accessToken, q]);
-
-  const filtered = useMemo(() => {
-    // users already filtered on server by q, but keep local fallback
-    const s = q.toLowerCase().trim();
-    if (!s) return users;
-    return users.filter((c) =>
-      (c.name || "").toLowerCase().includes(s) || (c.phoneNumber || "").includes(s)
-    );
-  }, [q, users]);
-
-  const startChat = async (contact) => {
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    if (!phoneNumber.trim()) {
+      setError("Please provide a phone number");
+      return;
+    }
+    setError("");
+    setSuccess("");
+    setSubmitting(true);
     try {
-      const res = await api.startConversation(accessToken, contact.id || contact._id);
-      // Navigate to chat list or conversation view when implemented
+      const res = await api.createContact(accessToken, { countryCode: countryCode.trim() || "+977", phoneNumber: phoneNumber.trim() });
+      setSuccess("Contact saved" + (res.conversationId ? ", opening chat..." : "."));
+      // Navigate to chat list (or later, open the specific conversation)
       router.replace("/chat");
     } catch (e) {
-      alert(e.message || "Failed to start chat");
+      setError(e.message || "Failed to save contact");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -76,51 +62,46 @@ export default function NewChatPage() {
           <Link href="/chat" className="size-10 grid place-items-center rounded-md hover:bg-gray-50" aria-label="Back">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6"/></svg>
           </Link>
-          <div className="text-[16px] font-semibold">New Chat</div>
+          <div className="text-[16px] font-semibold">Add Contact</div>
         </div>
       </header>
 
-      <div className="p-3">
-        <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-4"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M10 18a8 8 0 100-16 8 8 0 000 16z"/></svg>
-          </span>
-          <input
-            className="w-full h-10 pl-9 pr-3 rounded-full bg-[#f5f5f5] focus:outline-none focus:ring-2 focus:ring-black/10"
-            placeholder="Search by name or phone"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
-      </div>
-
       <div ref={listRef} className="flex-1 overflow-y-auto no-scrollbar pb-20">
-        {fetching && (
-          <div className="p-4 text-sm text-gray-500">Loading users...</div>
-        )}
-        {!fetching && filtered.map((c, idx) => (
-          <button
-            key={c.id || c._id || idx}
-            onClick={() => startChat(c)}
-            className="w-full text-left px-4 py-3 hover:bg-gray-50 active:bg-gray-100 outline-none"
-          >
-            <div className="flex items-center gap-3">
-              <div className="size-12 rounded-full p-0.5 bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500">
-                <div className="size-full rounded-full bg-white grid place-items-center text-sm font-medium">
-                  {(c.name || `${c.countryCode} ${c.phoneNumber}`)[0]}
-                </div>
-              </div>
-              <div className="leading-tight min-w-0">
-                <div className="font-semibold text-[15px] truncate">{c.name || `${c.countryCode} ${c.phoneNumber}`}</div>
-                <div className="text-[13px] text-gray-600 truncate">{c.countryCode} {c.phoneNumber}</div>
-              </div>
+        <form onSubmit={onSubmit} className="p-4 space-y-4 max-w-md">
+          <div className="grid grid-cols-[100px_1fr] gap-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Code</label>
+              <input
+                className="w-full h-11 px-3 rounded-xl bg-[#f5f5f5] focus:outline-none focus:ring-2 focus:ring-black/10"
+                placeholder="+977"
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+              />
             </div>
-          </button>
-        ))}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone number</label>
+              <input
+                className="w-full h-11 px-4 rounded-xl bg-[#f5f5f5] focus:outline-none focus:ring-2 focus:ring-black/10"
+                placeholder="e.g., 9812345678"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+              />
+            </div>
+          </div>
 
-        {!fetching && filtered.length === 0 && (
-          <div className="p-4 text-sm text-gray-500">No contacts found.</div>
-        )}
+          {error && <div className="text-sm text-red-600">{error}</div>}
+          {success && <div className="text-sm text-emerald-600">{success}</div>}
+
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="h-11 px-5 rounded-full bg-black text-white disabled:opacity-60 active:scale-95 transition-transform"
+            >
+              {submitting ? 'Saving...' : 'Save & Start Chat'}
+            </button>
+          </div>
+        </form>
       </div>
       <BottomNav />
     </div>

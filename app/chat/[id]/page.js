@@ -168,6 +168,8 @@ export default function ConversationPage({ params }) {
   const remoteAudioRef = useRef(null);
   const [isOnline, setIsOnline] = useState(null);
   const typingEmitRef = useRef(null);
+  const [convoStatus, setConvoStatus] = useState('accepted'); // 'pending' | 'accepted'
+  const [requestedBy, setRequestedBy] = useState(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -191,6 +193,17 @@ export default function ConversationPage({ params }) {
     (async () => {
       if (!accessToken || !otherId) return;
       try {
+        // Load conversation list to determine status with this user
+        const list = await api.conversations(accessToken);
+        if (!active) return;
+        const match = (list.conversations || []).find(c => String(c.otherUser?.id) === String(otherId));
+        if (match) {
+          setConvoStatus(match.status || 'accepted');
+          setRequestedBy(match.requestedBy || null);
+        } else {
+          setConvoStatus('accepted');
+          setRequestedBy(null);
+        }
         const res = await api.messagesWith(accessToken, otherId);
         if (!active) return;
         const mapped = (res.messages || []).map((m, idx) => ({
@@ -306,6 +319,11 @@ export default function ConversationPage({ params }) {
       if (String(by) !== String(otherId)) return;
       setMessages((prev) => prev.map(m => (ids.includes(m.id) ? { ...m, status: 'seen' } : m)));
     });
+    s.on('error_message', (e) => {
+      if (e?.message) {
+        alert(e.message);
+      }
+    });
     s.on("typing", ({ from, isTyping }) => {
       if (String(from) !== String(otherId)) return;
       if (typingClearRef.current) {
@@ -333,6 +351,7 @@ export default function ConversationPage({ params }) {
         s.off("typing");
         s.off('messages_seen');
         s.off('presence_update', onPresence);
+        s.off('error_message');
       }
       if (typingClearRef.current) {
         clearTimeout(typingClearRef.current);
@@ -364,6 +383,11 @@ export default function ConversationPage({ params }) {
   const send = () => {
     const text = input.trim();
     if (!text) return;
+    // Block sending if connection not accepted
+    if (convoStatus !== 'accepted') {
+      alert('Connection request not accepted yet');
+      return;
+    }
     const clientId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     seenRef.current.add(clientId);
     setMessages((prev) => [ ...prev, { id: clientId, clientId, mine: true, text, ts: Date.now(), status: 'sending' } ]);
@@ -402,6 +426,33 @@ export default function ConversationPage({ params }) {
 
       {/* Messages list */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll no-scrollbar px-3 py-2 pb-28 max-h-[calc(100vh-128px)] space-y-1">
+        {convoStatus === 'pending' && (
+          <div className="mb-2">
+            {String(requestedBy) === String(user?.id) ? (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 inline-block">Request sent. Waiting for acceptance.</div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 inline-block">This user wants to connect with you.</span>
+                <button
+                  onClick={async () => {
+                    try {
+                      const list = await api.conversations(accessToken);
+                      const match = (list.conversations || []).find(c => String(c.otherUser?.id) === String(otherId));
+                      if (match?.id) {
+                        await api.acceptConversation(accessToken, match.id);
+                        setConvoStatus('accepted');
+                        setRequestedBy(null);
+                      }
+                    } catch (e) {
+                      alert(e.message || 'Failed to accept');
+                    }
+                  }}
+                  className="text-xs h-7 px-3 rounded-full bg-black text-white active:scale-95"
+                >Accept</button>
+              </div>
+            )}
+          </div>
+        )}
         <AnimatePresence initial={false}>
           {groups.map((g, idx) => {
             if (g.type === "divider") return <DayDivider key={g.key} label={g.label} />;
