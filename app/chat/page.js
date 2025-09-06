@@ -25,6 +25,7 @@ export default function ChatPage() {
   const { user, loading, logout, accessToken } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
+  const [unread, setUnread] = useState({}); // { otherId: count }
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -47,6 +48,24 @@ export default function ChatPage() {
     return () => {
       abort = true;
     };
+  }, [accessToken]);
+
+  // Listen for global new-message events to update list + unread counts
+  useEffect(() => {
+    const onNew = async (e) => {
+      const { otherId } = e.detail || {};
+      // increment unread badge
+      setUnread((prev) => ({ ...prev, [otherId]: (prev[otherId] || 0) + 1 }));
+      // refresh conversations to bring latest message to top
+      if (accessToken) {
+        try {
+          const res = await api.conversations(accessToken);
+          setConversations(res.conversations || []);
+        } catch {}
+      }
+    };
+    window.addEventListener("chat:new-message", onNew);
+    return () => window.removeEventListener("chat:new-message", onNew);
   }, [accessToken]);
 
   if (loading) return <div className="flex-1 grid place-items-center">Loading...</div>;
@@ -97,7 +116,8 @@ export default function ChatPage() {
           {!loadingList && conversations.map((c) => {
             const title = c.otherUser?.name || `${c.otherUser?.countryCode} ${c.otherUser?.phoneNumber}`;
             const phone = `${c.otherUser?.countryCode || ''} ${c.otherUser?.phoneNumber || ''}`.trim();
-            const href = `/chat/${c.id}?name=${encodeURIComponent(title)}&phone=${encodeURIComponent(phone)}`;
+            const otherId = c.otherUser?.id || c.otherUser?._id || '';
+            const href = `/chat/${c.id}?otherId=${encodeURIComponent(otherId)}&name=${encodeURIComponent(title)}&phone=${encodeURIComponent(phone)}`;
             const time = c.lastMessage?.at ? new Date(c.lastMessage.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
             return (
               <Link href={href} key={c.id} className="block px-4 py-3 hover:bg-gray-50 active:bg-gray-100">
@@ -110,8 +130,8 @@ export default function ChatPage() {
                     </div>
                     <div className="text-[14px] text-gray-600 truncate">{c.lastMessage?.text || 'No messages yet'}</div>
                   </div>
-                  {c.lastMessage?.text && (
-                    <span className="ml-2 inline-grid place-items-center size-5 rounded-full bg-yellow-400 text-black text-[11px] font-bold">2</span>
+                  {!!unread[otherId] && (
+                    <span className="ml-2 inline-grid place-items-center min-w-5 h-5 px-1 rounded-full bg-yellow-400 text-black text-[11px] font-bold">{unread[otherId]}</span>
                   )}
                 </div>
               </Link>

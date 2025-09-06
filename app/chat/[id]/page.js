@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../../lib/auth";
+import { api } from "../../../lib/api";
+import { getSocket } from "../../../lib/socket";
 
 function AutoGrowTextarea({ value, onChange, placeholder, onSend }) {
   const ref = useRef(null);
@@ -92,21 +94,17 @@ function Message({ mine, text, time, compact, tail }) {
 export default function ConversationPage({ params }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, loading } = useAuth();
+  const { user, loading, accessToken } = useAuth();
 
   const title = searchParams.get("name") || "User";
   const phone = searchParams.get("phone") || "";
+  const otherId = searchParams.get("otherId") || "";
 
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
-  const [messages, setMessages] = useState(() => {
-    // initial sample thread
-    return [
-      { id: 1, mine: false, text: "Hi there!", ts: Date.now() - 1000 * 60 * 60 },
-      { id: 2, mine: true, text: "Hello 👋", ts: Date.now() - 1000 * 60 * 58 },
-      { id: 3, mine: false, text: "How's it going?", ts: Date.now() - 1000 * 60 * 45 },
-    ];
-  });
+  const [messages, setMessages] = useState([]);
+  const socketRef = useRef(null);
+  const seenRef = useRef(new Set()); // tracks _id or clientId to prevent duplicates
   const scrollRef = useRef(null);
   const [atBottom, setAtBottom] = useState(true);
   const [headerElevated, setHeaderElevated] = useState(false);
@@ -115,6 +113,65 @@ export default function ConversationPage({ params }) {
     if (!loading && !user) router.replace("/login");
   }, [user, loading, router]);
 
+  // Fetch history
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!accessToken || !otherId) return;
+      try {
+        const res = await api.messagesWith(accessToken, otherId);
+        if (!active) return;
+        const mapped = (res.messages || []).map((m, idx) => ({
+          id: m._id || idx,
+          mine: String(m.sender) === String(user?.id),
+          text: m.text,
+          ts: new Date(m.createdAt).getTime(),
+        }));
+        setMessages(mapped);
+      } catch {}
+    })();
+    return () => { active = false; };
+  }, [accessToken, otherId, user?.id]);
+
+  // Socket connect
+  useEffect(() => {
+    if (!accessToken || !otherId) return;
+    const s = getSocket(accessToken);
+    socketRef.current = s;
+    s.on("receive_message", (msg) => {
+      // Only append if it's part of this chat
+      const involves = [msg.sender, msg.recipient].map(String);
+      if (involves.includes(String(user?.id)) && involves.includes(String(otherId))) {
+        const key = String(msg.clientId || msg._id);
+        if (seenRef.current.has(key)) return; // already handled
+        seenRef.current.add(key);
+        setMessages((prev) => {
+          // Reconcile optimistic message if clientId matches
+          if (msg.clientId) {
+            const idx = prev.findIndex((m) => m.clientId && String(m.clientId) === String(msg.clientId));
+            if (idx !== -1) {
+              const clone = prev.slice();
+              clone[idx] = { id: msg._id, clientId: msg.clientId, mine: true, text: msg.text, ts: new Date(msg.createdAt).getTime() };
+              return clone;
+            }
+          }
+          return [
+            ...prev,
+            { id: msg._id, clientId: msg.clientId, mine: String(msg.sender) === String(user?.id), text: msg.text, ts: new Date(msg.createdAt).getTime() },
+          ];
+        });
+      }
+    });
+    s.on("typing", ({ from, isTyping }) => {
+      if (String(from) === String(otherId)) setTyping(!!isTyping);
+    });
+    return () => {
+      if (s) {
+        s.off("receive_message");
+        s.off("typing");
+      }
+    };
+  }, [accessToken, otherId, user?.id]);
   useEffect(() => {
     // Auto-scroll to bottom on new messages
     if (scrollRef.current) {
@@ -139,20 +196,14 @@ export default function ConversationPage({ params }) {
   const send = () => {
     const text = input.trim();
     if (!text) return;
-    setMessages((prev) => [
-      ...prev,
-      { id: prev.length + 1, mine: true, text, ts: Date.now() },
-    ]);
+    const clientId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    seenRef.current.add(clientId);
+    setMessages((prev) => [ ...prev, { id: clientId, clientId, mine: true, text, ts: Date.now() } ]);
+    // emit via socket
+    if (socketRef.current) {
+      socketRef.current.emit("send_message", { to: otherId, text, clientId });
+    }
     setInput("");
-    // Simulate the other user replying with a small delay and typing indicator
-    setTyping(true);
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        { id: prev.length + 1, mine: false, text: "Got it! 👍", ts: Date.now() },
-      ]);
-      setTyping(false);
-    }, 800);
   };
 
   const groups = useMemo(() => {
@@ -182,7 +233,7 @@ export default function ConversationPage({ params }) {
       <Header title={title} phone={phone} elevated={headerElevated} />
 
       {/* Messages list */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll no-scrollbar px-3 py-2 pb-28 space-y-1">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll no-scrollbar px-3 py-2 pb-28 max-h-[calc(100vh-128px)] space-y-1">
         {groups.map((g, idx) => {
           if (g.type === "divider") return <DayDivider key={g.key} label={g.label} />;
           const prev = groups[idx - 1];
