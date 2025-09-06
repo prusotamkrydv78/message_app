@@ -27,26 +27,34 @@ function AutoGrowTextarea({ value, onChange, placeholder, onSend }) {
       onKeyDown={onKeyDown}
       placeholder={placeholder}
       rows={1}
-      className="flex-1 resize-none rounded-md border bg-transparent px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-300"
+      className="flex-1 resize-none rounded-full px-4 py-2 bg-[#f5f5f5] focus:outline-none focus:ring-2 focus:ring-black/10"
     />
   );
 }
 
-function Header({ title, phone }) {
+function Header({ title, phone, elevated }) {
   return (
-    <header className="sticky top-0 z-10 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
-      <div className="h-12 px-2 flex items-center gap-2">
-        <Link href="/chat" className="size-10 grid place-items-center rounded-md hover:bg-gray-50" aria-label="Back">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6"/></svg>
-        </Link>
+    <header className={`sticky top-0 z-10 bg-white/95 backdrop-blur ${elevated ? 'shadow-md' : ''}`}>
+      <div className="h-14 px-4 flex items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <div className="size-8 rounded-full bg-gray-200 grid place-items-center text-xs font-medium">
+          <Link href="/chat" className="size-10 grid place-items-center rounded-md hover:bg-gray-50" aria-label="Back">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6"/></svg>
+          </Link>
+          <div className="size-9 rounded-full bg-gray-200 grid place-items-center text-xs font-medium">
             {title?.[0] || "U"}
           </div>
           <div className="leading-tight">
-            <div className="font-medium text-[13px] truncate max-w-[48vw] sm:max-w-none">{title}</div>
-            <div className="text-[11px] text-gray-500 truncate">{phone}</div>
+            <div className="font-semibold text-[15px] truncate max-w-[40vw] sm:max-w-none">{title}</div>
+            <div className="text-[12px] text-emerald-600">Online</div>
           </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button className="size-9 grid place-items-center rounded-full hover:bg-gray-50" aria-label="Video call">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14"/><rect x="3" y="7" width="12" height="10" rx="2"/></svg>
+          </button>
+          <button className="size-9 grid place-items-center rounded-full hover:bg-gray-50" aria-label="Voice call">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.12.9.33 1.78.63 2.63a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.45-1.45a2 2 0 012.11-.45c.85.3 1.73.51 2.63.63A2 2 0 0122 16.92z"/></svg>
+          </button>
         </div>
       </div>
     </header>
@@ -61,14 +69,21 @@ function DayDivider({ label }) {
   );
 }
 
-function Message({ mine, text, time, compact }) {
+function Message({ mine, text, time, compact, tail }) {
+  const containerGap = compact ? "-mt-1" : "mt-2";
+  const baseBubble = "max-w-[76%] rounded-2xl px-3 py-2 text-[14px] leading-relaxed";
+  const shadow = compact ? "shadow-none" : mine ? "shadow-[0_6px_18px_rgba(0,0,0,0.10)]" : "shadow-[0_4px_14px_rgba(0,0,0,0.08)]";
+  const colors = mine ? "bg-[#FFC93A] text-black msg-in-right" : "bg-white msg-in-left";
   return (
-    <div className={`w-full flex ${mine ? "justify-end" : "justify-start"} ${compact ? "-mt-0.5" : "mt-1"}`}>
-      <div
-        className={`${mine ? "bg-black text-white msg-in-right" : "bg-gray-100 msg-in-left"} max-w-[75%] rounded-2xl px-3 py-1.5 text-[14px] leading-relaxed shadow-sm`}
-      >
+    <div className={`w-full flex ${mine ? "justify-end" : "justify-start"} ${containerGap}`}>
+      <div className={`relative ${baseBubble} ${colors} ${shadow}`}>
         <div className="whitespace-pre-wrap break-words">{text}</div>
-        {!!time && <div className={`text-[10px] mt-1 ${mine ? "text-white/70" : "text-gray-500"}`}>{time}</div>}
+        {!!time && <div className={`text-[10px] mt-1 ${mine ? "text-black/70" : "text-gray-500"}`}>{time}</div>}
+        {tail && (
+          <span
+            className={`absolute bottom-0 ${mine ? 'right-0 translate-x-2' : 'left-0 -translate-x-2'} translate-y-1 w-3 h-3 rounded-bl-[10px] rounded-tr-[10px] ${mine ? 'bg-[#FFC93A]' : 'bg-white'} ${compact ? 'opacity-0' : 'opacity-100'} shadow-[inherit]`}
+          />
+        )}
       </div>
     </div>
   );
@@ -93,6 +108,8 @@ export default function ConversationPage({ params }) {
     ];
   });
   const scrollRef = useRef(null);
+  const [atBottom, setAtBottom] = useState(true);
+  const [headerElevated, setHeaderElevated] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -104,6 +121,20 @@ export default function ConversationPage({ params }) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight + 1000;
     }
   }, [messages]);
+
+  // Track scroll to toggle header elevation and composer visibility
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setAtBottom(distanceFromBottom < 8);
+      setHeaderElevated(el.scrollTop > 2);
+    };
+    onScroll();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
 
   const send = () => {
     const text = input.trim();
@@ -147,11 +178,11 @@ export default function ConversationPage({ params }) {
   if (loading || !user) return null;
 
   return (
-    <div className="flex-1 flex flex-col">
-      <Header title={title} phone={phone} />
+    <div className="flex-1 flex flex-col bg-white">
+      <Header title={title} phone={phone} elevated={headerElevated} />
 
       {/* Messages list */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll px-2 py-2 space-y-1">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll no-scrollbar px-3 py-2 pb-28 space-y-1">
         {groups.map((g, idx) => {
           if (g.type === "divider") return <DayDivider key={g.key} label={g.label} />;
           const prev = groups[idx - 1];
@@ -163,6 +194,7 @@ export default function ConversationPage({ params }) {
               text={g.m.text}
               time={g.m.isLastInGroup ? new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(g.m.ts) : ""}
               compact={compact}
+              tail={g.m.isLastInGroup}
             />
           );
         })}
@@ -178,15 +210,23 @@ export default function ConversationPage({ params }) {
             </div>
           </div>
         )}
+        {/* Delivered indicator (last outgoing) */}
+        {(() => {
+          const last = messages[messages.length - 1];
+          if (last && last.mine) {
+            return <div className="w-full flex justify-end pr-2"><span className="text-[12px] text-gray-500">Delivered</span></div>;
+          }
+          return null;
+        })()}
       </div>
 
       {/* Composer */}
       <form
         onSubmit={(e) => { e.preventDefault(); send(); }}
-        className="p-2 border-t flex items-end gap-2 bg-background"
+        className="sticky bottom-0 z-10 p-2.5 flex items-center gap-2 bg-white/95 backdrop-blur shadow-[0_-4px_16px_rgba(0,0,0,0.06)]"
       >
-        <button type="button" className="size-9 grid place-items-center rounded-md hover:bg-gray-50" aria-label="Attach">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 11-7.78-7.78l8.49-8.49a3.5 3.5 0 114.95 4.95l-8.49 8.49a1.5 1.5 0 11-2.12-2.12l7.78-7.78"/></svg>
+        <button type="button" className="size-9 grid place-items-center rounded-full hover:bg-gray-50" aria-label="Attach">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M21.44 11.05l-8.49 8.49a3.5 3.5 0 114.95 4.95l-8.49 8.49a1.5 1.5 0 11-2.12-2.12l7.78-7.78"/></svg>
         </button>
         <AutoGrowTextarea
           value={input}
@@ -196,13 +236,27 @@ export default function ConversationPage({ params }) {
         />
         <button
           type="submit"
-          className="h-9 px-4 rounded-md bg-black text-white disabled:opacity-60 active:scale-95 transition-transform"
+          className={`size-10 grid place-items-center rounded-full text-white active:scale-95 transition-transform ${input.trim() ? 'bg-black' : 'bg-gray-400 cursor-not-allowed'}`}
           disabled={!input.trim()}
           aria-label="Send"
+          title="Send"
         >
-          Send
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="size-5">
+            <path d="M3.4 2.6a1 1 0 00-1.3 1.28l3.07 8.2a1 1 0 01.02.63l-3.07 8.2A1 1 0 003.4 22l17.96-8.51a1 1 0 000-1.98L3.4 2.6zm5.43 8.22L6 6.3l9.74 4.19-6.91.33z" />
+          </svg>
         </button>
       </form>
+
+      {/* Scroll-to-bottom button when not at bottom */}
+      {!atBottom && (
+        <button
+          onClick={() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight + 1000; }}
+          className="absolute right-4 bottom-20 size-10 rounded-full bg-black text-white grid place-items-center shadow-md active:scale-95"
+          aria-label="Scroll to bottom"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m0 0l-6-6m6 6l6-6"/></svg>
+        </button>
+      )}
     </div>
   );
 }

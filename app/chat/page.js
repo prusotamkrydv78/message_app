@@ -5,25 +5,17 @@ import { useAuth } from "../../lib/auth";
 import Link from "next/link";
 import { api } from "../../lib/api";
 import FAB from "../../components/ui/fab";
+import Avatar from "../../components/ui/avatar";
+import BottomNav from "../../components/ui/bottom-nav";
 
 function TopBar({ onLogout }) {
   const { user } = useAuth();
   return (
-    <header className="sticky top-0 z-10 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
-      <div className="h-12 px-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="size-8 rounded-full bg-gray-200 grid place-items-center text-xs font-medium">
-            {user?.name?.[0]?.toUpperCase() || user?.phoneNumber?.slice(-2) || "U"}
-          </div>
-          <div className="leading-tight">
-            <div className="font-medium text-[13px]">{user?.name || "You"}</div>
-            <div className="text-[11px] text-gray-500">{user?.countryCode} {user?.phoneNumber}</div>
-          </div>
-        </div>
-        <button onClick={onLogout} className="text-[13px] px-3 py-1.5 rounded-md border">
-          Logout
-        </button>
-      </div>
+    <header className="px-4 py-3 flex items-center justify-between">
+      <div className="text-[22px] font-bold tracking-tight">Mengobrol</div>
+      <button className="size-9 grid place-items-center rounded-full hover:bg-gray-100" aria-label="Search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M10 18a8 8 0 100-16 8 8 0 000 16z"/></svg>
+      </button>
     </header>
   );
 }
@@ -60,57 +52,78 @@ export default function ChatPage() {
   if (loading) return <div className="flex-1 grid place-items-center">Loading...</div>;
   if (!user) return null;
 
+  // Derive a small set for stories (mocked from conversations' other users)
+  const storyUsers = conversations.slice(0, 8).map((c) => c.otherUser).filter(Boolean);
+
   return (
     <div className="flex-1 flex flex-col">
       <TopBar onLogout={logout} />
-      <main className="flex-1 grid grid-cols-1 md:grid-cols-[320px_1fr]">
-        {/* Recent chats list: visible on all screens, takes full width on mobile */}
-        <aside className="flex flex-col border-r min-h-[40dvh]">
-          <div className="p-2.5 border-b">
-            <input className="w-full h-9 px-3 rounded-md border bg-transparent text-[14px]" placeholder="Search" />
-          </div>
-          <div className="flex-1 overflow-y-auto divide-y">
-            {loadingList && (
-              <div className="p-3 text-sm text-gray-500">Loading conversations...</div>
-            )}
-            {!loadingList && conversations.map((c) => {
-              const title = c.otherUser?.name || `${c.otherUser?.countryCode} ${c.otherUser?.phoneNumber}`;
-              const phone = `${c.otherUser?.countryCode || ''} ${c.otherUser?.phoneNumber || ''}`.trim();
-              const href = `/chat/${c.id}?name=${encodeURIComponent(title)}&phone=${encodeURIComponent(phone)}`;
-              return (
-              <Link href={href} key={c.id} className="block p-2.5 hover:bg-gray-50 focus:bg-gray-50 outline-none">
-                <div className="flex items-center gap-3">
-                  <div className="size-9 rounded-full bg-gray-200 grid place-items-center text-xs font-medium">
-                    {c.otherUser?.name?.[0] || c.otherUser?.phoneNumber?.slice(-2) || "U"}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <div className="font-medium truncate text-[14px]">{title}</div>
-                      <div className="text-[11px] text-gray-500 ml-2 shrink-0">{c.lastMessage?.at ? new Date(c.lastMessage.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</div>
-                    </div>
-                    <div className="text-[13px] text-gray-500 truncate">{c.lastMessage?.text || 'No messages yet'}</div>
-                  </div>
-                </div>
-              </Link>
-              );})}
-            {!loadingList && conversations.length === 0 && (
-              <div className="p-3 text-sm text-gray-500">No chats yet. Start a conversation!</div>
-            )}
-          </div>
-        </aside>
 
-        {/* Chat window (hidden on small screens until a chat is selected in future) */}
-        <section className="hidden md:flex flex-col min-h-[60dvh]">
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            <div className="text-center text-sm text-gray-500 mt-8">Select a conversation to start chatting</div>
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Stories */}
+        <section className="px-4 pt-1 pb-3">
+          <div className="flex gap-4 overflow-x-auto pb-2">
+            <Link href="/chat/new" className="shrink-0 flex flex-col items-center gap-2">
+              <div className="size-14 rounded-full border-2 border-dashed border-gray-300 grid place-items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-6"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14"/></svg>
+              </div>
+              <span className="text-[11px] text-gray-600 font-medium">Add story</span>
+            </Link>
+            {storyUsers.map((u, idx) => (
+              <div key={u.id || idx} className="shrink-0 flex flex-col items-center gap-2">
+                <div className="size-14 rounded-full p-0.5 bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500">
+                  <Avatar name={u.name || u.phoneNumber} size={52} className="border-2 border-white" />
+                </div>
+                <span className="text-[11px] text-gray-700 max-w-[64px] truncate font-medium">{u.name || u.phoneNumber?.slice(-4)}</span>
+              </div>
+            ))}
           </div>
         </section>
-      </main>
 
-      {/* Floating Action Button to start new conversation */}
-      <Link href="/chat/new" aria-label="Start new chat">
-        <FAB />
-      </Link>
+        {/* Chats heading */}
+        <div className="px-4 mt-2 mb-1 flex items-center justify-between">
+          <h3 className="text-[15px] font-semibold">Chats</h3>
+          <button className="size-9 grid place-items-center rounded-full hover:bg-gray-100" aria-label="More">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="size-5"><path d="M12 6.75a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zM12 13.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zM12 19.75a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z"/></svg>
+          </button>
+        </div>
+
+        {/* Chats list */}
+        <div>
+          {loadingList && (
+            <div className="p-4 text-sm text-gray-500">Loading conversations...</div>
+          )}
+          {!loadingList && conversations.map((c) => {
+            const title = c.otherUser?.name || `${c.otherUser?.countryCode} ${c.otherUser?.phoneNumber}`;
+            const phone = `${c.otherUser?.countryCode || ''} ${c.otherUser?.phoneNumber || ''}`.trim();
+            const href = `/chat/${c.id}?name=${encodeURIComponent(title)}&phone=${encodeURIComponent(phone)}`;
+            const time = c.lastMessage?.at ? new Date(c.lastMessage.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            return (
+              <Link href={href} key={c.id} className="block px-4 py-3 hover:bg-gray-50 active:bg-gray-100">
+                <div className="flex items-center gap-3">
+                  <Avatar name={title} size={50} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <div className="font-semibold text-[15px] truncate">{title}</div>
+                      <div className="text-[12px] text-gray-500 ml-2 shrink-0">{time}</div>
+                    </div>
+                    <div className="text-[14px] text-gray-600 truncate">{c.lastMessage?.text || 'No messages yet'}</div>
+                  </div>
+                  {c.lastMessage?.text && (
+                    <span className="ml-2 inline-grid place-items-center size-5 rounded-full bg-yellow-400 text-black text-[11px] font-bold">2</span>
+                  )}
+                </div>
+              </Link>
+            );
+          })}
+          {!loadingList && conversations.length === 0 && (
+            <div className="p-4 text-sm text-gray-500">No chats yet. Start a conversation!</div>
+          )}
+        </div>
+      </div>
+
+      <BottomNav />
     </div>
   );
 }
