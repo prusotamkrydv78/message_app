@@ -24,3 +24,19 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Animations */
+@keyframes messageInLeft {
+  0% { opacity: 0; transform: translateX(-8px) scale(0.98); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes messageInRight {
+  0% { opacity: 0; transform: translateX(8px) scale(0.98); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.msg-in-left { animation: messageInLeft 180ms ease-out both; }
+.msg-in-right { animation: messageInRight 180ms ease-out both; }
+
+/* Smooth scroll area */
+.chat-scroll { scroll-behavior: smooth; }
