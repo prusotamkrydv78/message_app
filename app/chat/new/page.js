@@ -14,6 +14,16 @@ export default function NewChatPage() {
   const [fetching, setFetching] = useState(false);
   const listRef = useRef(null);
   const [headerElevated, setHeaderElevated] = useState(false);
+  
+  // track scroll to add subtle shadow to header (must be before any early returns)
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const onScroll = () => setHeaderElevated(el.scrollTop > 2);
+    onScroll();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -58,16 +68,6 @@ export default function NewChatPage() {
 
   if (loading) return <div className="flex-1 grid place-items-center">Loading...</div>;
   if (!user) return null;
-
-  // track scroll to add subtle shadow to header
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    const onScroll = () => setHeaderElevated(el.scrollTop > 2);
-    onScroll();
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, []);
 
   return (
     <div className="flex-1 flex flex-col bg-white">
