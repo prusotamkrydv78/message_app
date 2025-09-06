@@ -4,15 +4,15 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../lib/auth";
 import Link from "next/link";
 import { api } from "../../lib/api";
-import FAB from "../../components/ui/fab";
-import Avatar from "../../components/ui/avatar";
 import BottomNav from "../../components/ui/bottom-nav";
+import { Avatar } from "@/components/ui/avatar";
+import { AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
 
 function TopBar({ onLogout }) {
   const { user } = useAuth();
   return (
     <header className="px-4 py-3 flex items-center justify-between">
-      <div className="text-[22px] font-bold tracking-tight">Mengobrol</div>
+      <div className="text-[22px] font-bold tracking-tight">ChatX</div>
       <button className="size-9 grid place-items-center rounded-full hover:bg-gray-100" aria-label="Search">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M10 18a8 8 0 100-16 8 8 0 000 16z"/></svg>
       </button>
@@ -81,8 +81,8 @@ export default function ChatPage() {
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
         {/* Stories */}
-        <section className="px-4 pt-1 pb-3">
-          <div className="flex gap-4 overflow-x-auto pb-2">
+        <section className="px-4 pt-1 pb-3 overflow-x-auto no-scrollbar">
+          <div className="flex gap-4">
             <Link href="/chat/new" className="shrink-0 flex flex-col items-center gap-2">
               <div className="size-14 rounded-full border-2 border-dashed border-gray-300 grid place-items-center">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-6"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14"/></svg>
@@ -122,7 +122,18 @@ export default function ChatPage() {
             return (
               <Link href={href} key={c.id} className="block px-4 py-3 hover:bg-gray-50 active:bg-gray-100">
                 <div className="flex items-center gap-3">
-                  <Avatar name={title} size={50} />
+                  <div className="flex-shrink-0">
+                    <Avatar>
+                      <AvatarFallback>
+                        <AvatarImage>
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-7">
+                            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                          </svg>
+                        </AvatarImage>
+                      </AvatarFallback>
+                    </Avatar>
+                  </div>
+                 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
                       <div className="font-semibold text-[15px] truncate">{title}</div>

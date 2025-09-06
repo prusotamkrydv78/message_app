@@ -1,0 +1,9 @@
+del components\ui\avatar.js
+del components\ui\card.js
+del components\ui\fab.js
+del components\ui\button.jsx
+del components\ui\input.jsx
+del components\ui\label.jsx
+del components\ui\textarea.jsx
+del components\ui\alert.jsx
+del components\ui\badge.jsx

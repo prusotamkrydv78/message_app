@@ -1,15 +1,20 @@
 "use client";
-import clsx from "clsx";
+import * as React from "react";
+import { cn } from "../../lib/utils";
 
-export default function Input({ label, hint, className = "", ...props }) {
+const Input = React.forwardRef(({ className, type, ...props }, ref) => {
   return (
-    <label className={clsx("block", className)}>
-      {label && <span className="block text-[13px] text-gray-700 mb-1">{label}</span>}
-      <input
-        className="w-full h-11 px-3 rounded-md border bg-white/90 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-black/20 placeholder:text-gray-400"
-        {...props}
-      />
-      {hint && <span className="mt-1 block text-[12px] text-gray-500">{hint}</span>}
-    </label>
+    <input
+      type={type}
+      className={cn(
+        "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        className
+      )}
+      ref={ref}
+      {...props}
+    />
   );
-}
+});
+Input.displayName = "Input";
+
+export { Input };

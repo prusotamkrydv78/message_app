@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useAuth } from "../../../lib/auth";
 import { api } from "../../../lib/api";
 import BottomNav from "../../../components/ui/bottom-nav";
+import { Button } from "../../../components/ui/button";
+import { Input } from "../../../components/ui/input";
+import { Label } from "../../../components/ui/label";
 
 export default function NewChatPage() {
   const router = useRouter();
@@ -68,24 +71,14 @@ export default function NewChatPage() {
 
       <div ref={listRef} className="flex-1 overflow-y-auto no-scrollbar pb-20">
         <form onSubmit={onSubmit} className="p-4 space-y-4 max-w-md">
-          <div className="grid grid-cols-[100px_1fr] gap-2">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Code</label>
-              <input
-                className="w-full h-11 px-3 rounded-xl bg-[#f5f5f5] focus:outline-none focus:ring-2 focus:ring-black/10"
-                placeholder="+977"
-                value={countryCode}
-                onChange={(e) => setCountryCode(e.target.value)}
-              />
+          <div className="grid grid-cols-[120px_1fr] gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="ccode">Code</Label>
+              <Input id="ccode" placeholder="+977" value={countryCode} onChange={(e) => setCountryCode(e.target.value)} />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone number</label>
-              <input
-                className="w-full h-11 px-4 rounded-xl bg-[#f5f5f5] focus:outline-none focus:ring-2 focus:ring-black/10"
-                placeholder="e.g., 9812345678"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-              />
+            <div className="grid gap-1.5">
+              <Label htmlFor="phone">Phone number</Label>
+              <Input id="phone" placeholder="e.g., 9812345678" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
             </div>
           </div>
 
@@ -93,13 +86,9 @@ export default function NewChatPage() {
           {success && <div className="text-sm text-emerald-600">{success}</div>}
 
           <div className="pt-2">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="h-11 px-5 rounded-full bg-black text-white disabled:opacity-60 active:scale-95 transition-transform"
-            >
+            <Button type="submit" disabled={submitting}>
               {submitting ? 'Saving...' : 'Save & Start Chat'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
