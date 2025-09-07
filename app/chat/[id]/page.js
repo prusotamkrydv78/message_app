@@ -209,7 +209,8 @@ export default function ConversationPage({ params }) {
   const [messages, setMessages] = useState([]); // each: {id, mine, text, ts, status}
   const socketRef = useRef(null);
   const seenRef = useRef(new Set()); // tracks _id or clientId to prevent duplicates
-  const scrollRef = useRef(null);
+  const viewportRef = useRef(null);
+  const bottomRef = useRef(null);
   const [atBottom, setAtBottom] = useState(true);
   const [headerElevated, setHeaderElevated] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
@@ -421,16 +422,23 @@ export default function ConversationPage({ params }) {
       }
     };
   }, [accessToken, otherId, user?.id]);
+
+  // Auto-scroll to bottom on mount and on new messages
   useEffect(() => {
-    // Auto-scroll to bottom on new messages
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight + 1000;
+    if (bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: "auto", block: "end" });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
     }
   }, [messages]);
 
   // Track scroll to toggle header elevation and composer visibility
   useEffect(() => {
-    const el = scrollRef.current;
+    const el = viewportRef.current;
     if (!el) return;
     const onScroll = () => {
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -492,8 +500,8 @@ export default function ConversationPage({ params }) {
       />
 
       {/* Messages list */}
-      <ScrollArea className="flex-1 px-4 py-2">
-        <div ref={scrollRef} className="space-y-1 pb-4">
+      <ScrollArea ref={viewportRef} className="flex-1 px-4 py-2">
+        <div className="space-y-1 pb-4">
           <AnimatePresence initial={false}>
             {groups.map((g, idx) => {
               if (g.type === "divider") return <DayDivider key={g.key} label={g.label} />;
@@ -539,6 +547,7 @@ export default function ConversationPage({ params }) {
                 </motion.div>
               )}
             </AnimatePresence>
+            <div ref={bottomRef} />
           </AnimatePresence>
         </div>
       </ScrollArea>
@@ -627,7 +636,7 @@ export default function ConversationPage({ params }) {
           className="fixed right-4 bottom-24 z-20"
         >
           <Button
-            onClick={() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight + 1000; }}
+            onClick={() => { if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' }); }}
             size="icon"
             className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm border shadow-lg hover:shadow-xl text-foreground hover:bg-white"
           >
