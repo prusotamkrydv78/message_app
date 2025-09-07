@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../..
 export default function Register() {
   const [name, setName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [countryCode, setCountryCode] = useState("+1");
+  const [countryCode, setCountryCode] = useState("+977");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -149,7 +149,7 @@ export default function Register() {
                       className="px-3 py-2 border border-input bg-background rounded-md text-sm w-20"
                       disabled={loading}
                     >  
-                      {[977].map((code) => (
+                      {["+977", "+91", "+1", "+44"].map((code) => (
                         <option key={code} value={code}>
                           {code}
                         </option>

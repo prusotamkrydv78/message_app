@@ -14,8 +14,9 @@ import { Button } from "../../../components/ui/button";
 import { Avatar, AvatarFallback } from "../../../components/ui/avatar";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 
-function AutoGrowTextarea({ value, onChange, placeholder, onSend, onBlur }) {
-  const ref = useRef(null);
+function AutoGrowTextarea({ value, onChange, placeholder, onSend, onBlur, inputRef }) {
+  const inner = useRef(null);
+  const ref = inputRef || inner;
   useEffect(() => {
     if (!ref.current) return;
     ref.current.style.height = "auto";
@@ -90,7 +91,7 @@ function Header({ title, phone, elevated, callManager, callState, otherId, isOnl
             size="sm"
             className="h-10 w-10 p-0"
             onClick={() => callManager?.startCall(otherId, false)}
-            disabled={callState !== 'idle'}
+            disabled={['calling','ringing','connected'].includes(callState)}
           >
             <Phone className="h-5 w-5" />
           </Button>
@@ -100,7 +101,7 @@ function Header({ title, phone, elevated, callManager, callState, otherId, isOnl
             size="sm"
             className="h-10 w-10 p-0"
             onClick={() => callManager?.startCall(otherId, true)}
-            disabled={callState !== 'idle'}
+            disabled={['calling','ringing','connected'].includes(callState)}
           >
             <Video className="h-5 w-5" />
           </Button>
@@ -216,12 +217,22 @@ export default function ConversationPage({ params }) {
   const [callManager, setCallManager] = useState(null);
   const [callState, setCallState] = useState(null); // { type, otherId, status, callerName }
   const remoteAudioRef = useRef(null);
+  const composerRef = useRef(null);
   const [isOnline, setIsOnline] = useState(null);
   const typingEmitRef = useRef(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [user, loading, router]);
+
+  // Focus the input when entering the chat
+  useEffect(() => {
+    if (composerRef.current) {
+      // slight delay to ensure layout is ready
+      const t = setTimeout(() => composerRef.current?.focus(), 60);
+      return () => clearTimeout(t);
+    }
+  }, [composerRef]);
 
   // Detect coarse pointer devices (mobile) to hide emoji picker button
   useEffect(() => {
@@ -262,27 +273,45 @@ export default function ConversationPage({ params }) {
     const s = getSocket(accessToken);
     const cm = new CallManager(s, user.id);
     
-    cm.onIncomingCall = (from, offer) => {
-      setCallState({ 
-        type: 'incoming', 
-        otherId: from, 
-        status: 'ringing', 
-        callerName: from === otherId ? title : 'Unknown',
-        offer 
-      });
+    cm.onIncomingCall = (from, offer, isVideo) => {
+      // Only show call modal if it's from the current chat partner
+      if (String(from) === String(otherId)) {
+        setCallState({ 
+          type: 'incoming', 
+          otherId: from, 
+          status: 'ringing', 
+          callerName: title,
+          offer,
+          isVideo: !!isVideo
+        });
+      }
     };
     
     cm.onCallStateChange = (status) => {
-      // If status transitions to calling and we don't yet have state, initialize as outgoing
-      setCallState(prev => prev ? { ...prev, status } : { type: 'outgoing', otherId, status, callerName: title });
-      if (status === 'connected' && cm.remoteStream) {
-        if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = cm.remoteStream;
+      setCallState(prev => {
+        if (!prev && status === 'calling') {
+          // Initialize outgoing call state
+          return { 
+            type: 'outgoing', 
+            otherId, 
+            status, 
+            callerName: title,
+            isVideo: cm.currentCall?.isVideo || false
+          };
         }
-      }
-      if (status === 'ended' || status === 'declined') {
-        setCallState(null);
-      }
+        if (prev) {
+          const newState = { ...prev, status };
+          if (status === 'connected' && cm.remoteStream && remoteAudioRef.current) {
+            remoteAudioRef.current.srcObject = cm.remoteStream;
+            remoteAudioRef.current.play().catch(console.error);
+          }
+          if (status === 'ended' || status === 'declined') {
+            return null;
+          }
+          return newState;
+        }
+        return prev;
+      });
     };
     
     cm.onCallError = (error) => {
@@ -292,7 +321,9 @@ export default function ConversationPage({ params }) {
     
     setCallManager(cm);
     return () => {
-      cm.endCall();
+      if (cm.currentCall) {
+        cm.endCall();
+      }
     };
   }, [accessToken, user?.id, otherId, title]);
 
@@ -422,6 +453,8 @@ export default function ConversationPage({ params }) {
       socketRef.current.emit("send_message", { to: otherId, text, clientId });
     }
     setInput("");
+    // keep input active after send
+    requestAnimationFrame(() => composerRef.current?.focus());
   };
 
   const groups = useMemo(() => {
@@ -448,7 +481,15 @@ export default function ConversationPage({ params }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex flex-col">
-      <Header title={title} phone={phone} elevated={headerElevated} callManager={callManager} callState={callState} otherId={otherId} isOnline={isOnline} />
+      <Header
+        title={title}
+        phone={phone}
+        elevated={headerElevated}
+        callManager={callManager}
+        callState={callState?.status || 'idle'}
+        otherId={otherId}
+        isOnline={isOnline}
+      />
 
       {/* Messages list */}
       <ScrollArea className="flex-1 px-4 py-2">
@@ -558,6 +599,7 @@ export default function ConversationPage({ params }) {
               placeholder="Type a message..."
               onSend={send}
               onBlur={() => socketRef.current?.emit('typing', { to: otherId, isTyping: false })}
+              inputRef={composerRef}
             />
           </div>
 
@@ -600,6 +642,7 @@ export default function ConversationPage({ params }) {
         type={callState?.type}
         callerName={callState?.callerName}
         status={callState?.status}
+        isVideo={callState?.isVideo}
         onAnswer={() => callManager?.answerCall(callState?.offer)}
         onDecline={() => callManager?.declineCall()}
         onEndCall={() => callManager?.endCall()}
