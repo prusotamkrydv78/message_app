@@ -289,17 +289,12 @@ export default function VideoCallModal({
     </motion.div>
   );
 
+  if (!isOpen) return null;
+
   return (
-    <AnimatePresence mode="wait">
-      {isOpen && (
-        <>
-          {isMinimized && status === 'connected' ? (
-            <MinimizedCall key="minimized-call" />
-          ) : (
-            <FullScreenVideoCall key="fullscreen-call" />
-          )}
-        </>
-      )}
-    </AnimatePresence>
+    <>
+      {!isMinimized && <FullScreenVideoCall />}
+      {isMinimized && <MinimizedVideoCall />}
+    </>
   );
 }

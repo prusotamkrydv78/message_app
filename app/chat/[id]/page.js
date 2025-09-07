@@ -400,17 +400,27 @@ export default function ConversationPage({ params }) {
     
     // Voice call handlers
     cm.onIncomingCall = (from, offer) => {
-      setCallState({ 
-        type: 'incoming', 
-        otherId: from, 
-        status: 'ringing', 
-        callerName: from === otherId ? title : 'Unknown',
-        offer 
+      setCallState(prev => {
+        // Prevent duplicate incoming call states
+        if (prev && prev.type === 'incoming' && prev.otherId === from && prev.status === 'ringing') {
+          return prev;
+        }
+        return { 
+          type: 'incoming', 
+          otherId: from, 
+          status: 'ringing', 
+          callerName: from === otherId ? title : 'Unknown',
+          offer 
+        };
       });
     };
     
     cm.onCallStateChange = (status) => {
-      setCallState(prev => prev ? { ...prev, status } : { type: 'outgoing', otherId, status, callerName: title });
+      setCallState(prev => {
+        // Prevent unnecessary re-renders if status hasn't changed
+        if (prev && prev.status === status) return prev;
+        return prev ? { ...prev, status } : { type: 'outgoing', otherId, status, callerName: title };
+      });
       if (status === 'connected' && cm.remoteStream) {
         if (remoteAudioRef.current) {
           remoteAudioRef.current.srcObject = cm.remoteStream;
@@ -431,17 +441,27 @@ export default function ConversationPage({ params }) {
 
     // Video call handlers
     vcm.onIncomingCall = (from, offer) => {
-      setVideoCallState({ 
-        type: 'incoming', 
-        otherId: from, 
-        status: 'ringing', 
-        callerName: from === otherId ? title : 'Unknown',
-        offer 
+      setVideoCallState(prev => {
+        // Prevent duplicate incoming call states
+        if (prev && prev.type === 'incoming' && prev.otherId === from && prev.status === 'ringing') {
+          return prev;
+        }
+        return { 
+          type: 'incoming', 
+          otherId: from, 
+          status: 'ringing', 
+          callerName: from === otherId ? title : 'Unknown',
+          offer 
+        };
       });
     };
     
     vcm.onCallStateChange = (status) => {
-      setVideoCallState(prev => prev ? { ...prev, status } : { type: 'outgoing', otherId, status, callerName: title });
+      setVideoCallState(prev => {
+        // Prevent unnecessary re-renders if status hasn't changed
+        if (prev && prev.status === status) return prev;
+        return prev ? { ...prev, status } : { type: 'outgoing', otherId, status, callerName: title };
+      });
       if (status === 'connected') {
         if (localVideoRef.current && vcm.localStream) {
           localVideoRef.current.srcObject = vcm.localStream;
@@ -470,7 +490,7 @@ export default function ConversationPage({ params }) {
       cm.endCall();
       vcm.endCall();
     };
-  }, [accessToken, user?.id, otherId, title]);
+  }, [accessToken, user?.id]);
 
   // Emit typing on change (immediate true) with debounce to false
   const handleInputChange = (val) => {
@@ -944,6 +964,7 @@ export default function ConversationPage({ params }) {
         onDecline={() => callManager?.declineCall()}
         onEndCall={() => callManager?.endCall()}
         onToggleMute={() => callManager?.toggleMute()}
+        localStream={callManager?.localStream}
       />
 
       {/* Video Call Modal */}
