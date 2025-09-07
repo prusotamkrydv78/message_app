@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Phone, UserPlus, ArrowLeft, Check, PhoneCall, Video } from "lucide-react";
@@ -21,6 +21,7 @@ export default function NewChatPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [countryCode, setCountryCode] = useState("+977");
   const [validatedUser, setValidatedUser] = useState(null);
+  const validatedUserRef = useRef(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [callManager, setCallManager] = useState(null);
@@ -45,12 +46,13 @@ export default function NewChatPage() {
     
     cm.onIncomingCall = (from, offer) => {
       // Only show call modal if it's from the validated user
-      if (validatedUser && String(from) === String(validatedUser.id || validatedUser._id)) {
+      const vu = validatedUserRef.current;
+      if (vu && String(from) === String(vu.id || vu._id)) {
         setCallState({ 
           type: 'incoming', 
           otherId: from, 
           status: 'ringing', 
-          callerName: validatedUser.name,
+          callerName: vu.name,
           offer,
           isVideo: cm.currentCall?.isVideo || false
         });
@@ -60,12 +62,12 @@ export default function NewChatPage() {
     cm.onCallStateChange = (status) => {
       setCallState(prev => {
         if (!prev && status === 'calling') {
-          // Initialize outgoing call state
+          const vu = validatedUserRef.current;
           return { 
             type: 'outgoing', 
-            otherId: validatedUser?.id || validatedUser?._id, 
+            otherId: vu?.id || vu?._id, 
             status, 
-            callerName: validatedUser?.name,
+            callerName: vu?.name,
             isVideo: cm.currentCall?.isVideo || false
           };
         }
@@ -103,7 +105,12 @@ export default function NewChatPage() {
         cm.endCall();
       }
     };
-  }, [accessToken, user?.id, toast]); // Removed validatedUser dependency
+  }, [accessToken, user?.id, toast]); // validatedUser accessed via ref
+
+  // Keep a ref in sync with the latest validatedUser
+  useEffect(() => {
+    validatedUserRef.current = validatedUser;
+  }, [validatedUser]);
 
   // Auto-validate phone number when 10 digits are entered
   useEffect(() => {
@@ -112,9 +119,9 @@ export default function NewChatPage() {
     } else {
       setValidatedUser(null);
     }
-  }, [phoneNumber, countryCode]);
+  }, [phoneNumber, countryCode, validatePhoneNumber]);
 
-  const validatePhoneNumber = async () => {
+  const validatePhoneNumber = useCallback(async () => {
     if (!accessToken || phoneNumber.length !== 10) return;
     
     setIsValidating(true);
@@ -150,7 +157,7 @@ export default function NewChatPage() {
     } finally {
       setIsValidating(false);
     }
-  };
+  }, [accessToken, countryCode, phoneNumber, toast, user?.id]);
 
   const sendConnectionRequest = async (targetUser) => {
     if (!accessToken || !targetUser) return;
