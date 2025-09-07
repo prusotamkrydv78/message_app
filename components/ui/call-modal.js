@@ -1,9 +1,28 @@
 "use client";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Button } from "./button";
 import { Avatar, AvatarFallback } from "./avatar";
+
+// Inline icons to avoid external icon package initialization issues in production bundles
+const IconPhone = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.86 19.86 0 0 1 3.09 5.18 2 2 0 0 1 5.11 3h3a2 2 0 0 1 2 1.72c.12.81.31 1.6.57 2.34a2 2 0 0 1-.45 2.11L9 10a16 16 0 0 0 5 5l.83-1.24a2 2 0 0 1 2.11-.45c.74.26 1.53.45 2.34.57A2 2 0 0 1 22 16.92z"/></svg>
+);
+const IconPhoneOff = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.66 13.66a12 12 0 0 1-1.32-1.32m-2.76-4.02A16 16 0 0 1 3.09 5.18 2 2 0 0 1 5.11 3h3a2 2 0 0 1 2 1.72c.12.81.31 1.6.57 2.34a2 2 0 0 1-.45 2.11L9 10m6 6 1.24-.83a2 2 0 0 1 2.11-.45c.74.26 1.53.45 2.34.57A2 2 0 0 0 22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-7.95-3.54M1 1l22 22"/></svg>
+);
+const IconMic = ({ className = "w-6 h-6" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1v11a3 3 0 0 1-6 0"/><path d="M19 8a7 7 0 0 1-14 0"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+);
+const IconMicOff = ({ className = "w-6 h-6" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><path d="M12 1v5"/><path d="M17 8a5 5 0 0 1-5 5"/><path d="M12 19v3"/><path d="M8 22h8"/></svg>
+);
+const IconVideo = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+);
+const IconVideoOff = ({ className = "w-6 h-6" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 10.4V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6.4"/><path d="M22 12l-4-2v4l4-2z"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+);
 
 export default function CallModal({ 
   isOpen, 
@@ -103,8 +122,8 @@ export default function CallModal({
               {callerName || "Unknown"}
             </h2>
             <p className="text-muted-foreground flex items-center justify-center gap-2">
-              {isVideo && <Video className="w-4 h-4" />}
-              {!isVideo && <Phone className="w-4 h-4" />}
+              {isVideo && <IconVideo className="w-4 h-4" />}
+              {!isVideo && <IconPhone className="w-4 h-4" />}
               {getStatusText()}
             </p>
           </motion.div>
@@ -123,14 +142,14 @@ export default function CallModal({
                   size="lg"
                   className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg hover:shadow-xl transition-all"
                 >
-                  <PhoneOff className="w-8 h-8" />
+                  <IconPhoneOff className="w-8 h-8" />
                 </Button>
                 <Button
                   onClick={onAnswer}
                   size="lg"
                   className="w-16 h-16 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-lg hover:shadow-xl transition-all"
                 >
-                  <Phone className="w-8 h-8" />
+                  <IconPhone className="w-8 h-8" />
                 </Button>
               </>
             )}
@@ -145,7 +164,7 @@ export default function CallModal({
                       variant={muted ? "destructive" : "secondary"}
                       className="w-14 h-14 rounded-full shadow-lg hover:shadow-xl transition-all"
                     >
-                      {muted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+                      {muted ? <IconMicOff className="w-6 h-6" /> : <IconMic className="w-6 h-6" />}
                     </Button>
                     
                     {isVideo && (
@@ -155,7 +174,7 @@ export default function CallModal({
                         variant={videoOff ? "destructive" : "secondary"}
                         className="w-14 h-14 rounded-full shadow-lg hover:shadow-xl transition-all"
                       >
-                        {videoOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
+                        {videoOff ? <IconVideoOff className="w-6 h-6" /> : <IconVideo className="w-6 h-6" />}
                       </Button>
                     )}
                   </>
@@ -166,7 +185,7 @@ export default function CallModal({
                   size="lg"
                   className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg hover:shadow-xl transition-all"
                 >
-                  <PhoneOff className="w-8 h-8" />
+                  <IconPhoneOff className="w-8 h-8" />
                 </Button>
               </>
             )}
