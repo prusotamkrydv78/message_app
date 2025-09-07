@@ -1,15 +1,15 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Phone, Video, Smile, Paperclip, Send, ChevronDown, MoreVertical } from "lucide-react";
 import { useAuth } from "../../../lib/auth";
 import { api } from "../../../lib/api";
 import EmojiPicker from "emoji-picker-react";
-import { getSocket } from "../../../lib/socket";
-import { CallManager } from "../../../lib/webrtc";
-import CallModal from "../../../components/ui/call-modal";
+// Defer heavy/possibly cyclic modules
+const CallModal = dynamic(() => import("../../../components/ui/call-modal"), { ssr: false });
 import { Button } from "../../../components/ui/button";
 import { Avatar, AvatarFallback } from "../../../components/ui/avatar";
 import { ScrollArea } from "../../../components/ui/scroll-area";
@@ -271,8 +271,13 @@ export default function ConversationPage({ params }) {
   // Initialize call manager
   useEffect(() => {
     if (!accessToken || !user?.id) return;
-    const s = getSocket(accessToken);
-    const cm = new CallManager(s, user.id);
+    let cm;
+    let mounted = true;
+    (async () => {
+      const { getSocket } = await import("../../../lib/socket");
+      const { CallManager } = await import("../../../lib/webrtc");
+      const s = getSocket(accessToken);
+      cm = new CallManager(s, user.id);
     
     cm.onIncomingCall = (from, offer, isVideo) => {
       // Only show call modal if it's from the current chat partner
@@ -320,11 +325,12 @@ export default function ConversationPage({ params }) {
       setCallState(null);
     };
     
-    setCallManager(cm);
+      if (!mounted) return;
+      setCallManager(cm);
+    })();
     return () => {
-      if (cm.currentCall) {
-        cm.endCall();
-      }
+      mounted = false;
+      if (cm?.currentCall) cm.endCall();
     };
   }, [accessToken, user?.id, otherId, title]);
 
@@ -344,7 +350,11 @@ export default function ConversationPage({ params }) {
   // Socket connect
   useEffect(() => {
     if (!accessToken || !otherId) return;
-    const s = getSocket(accessToken);
+    let s;
+    let cleanup;
+    (async () => {
+      const { getSocket } = await import("../../../lib/socket");
+      s = getSocket(accessToken);
     socketRef.current = s;
     // request presence for header indicator
     s.emit('presence_request', { userId: otherId });
@@ -409,18 +419,20 @@ export default function ConversationPage({ params }) {
         setTyping(false);
       }
     });
-    return () => {
-      if (s) {
-        s.off("receive_message");
-        s.off("typing");
-        s.off('messages_seen');
-        s.off('presence_update', onPresence);
-      }
-      if (typingClearRef.current) {
-        clearTimeout(typingClearRef.current);
-        typingClearRef.current = null;
-      }
-    };
+      cleanup = () => {
+        if (s) {
+          s.off("receive_message");
+          s.off("typing");
+          s.off('messages_seen');
+          s.off('presence_update', onPresence);
+        }
+        if (typingClearRef.current) {
+          clearTimeout(typingClearRef.current);
+          typingClearRef.current = null;
+        }
+      };
+    })();
+    return () => cleanup?.();
   }, [accessToken, otherId, user?.id]);
 
   // Auto-scroll to bottom on mount and on new messages

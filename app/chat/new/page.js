@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { Phone, UserPlus, ArrowLeft, Check, PhoneCall, Video } from "lucide-react";
 import { useAuth } from "../../../lib/auth";
@@ -10,9 +11,8 @@ import { Input } from "../../../components/ui/input";
 import { Card, CardContent } from "../../../components/ui/card";
 import { Avatar, AvatarFallback } from "../../../components/ui/avatar";
 import { useToast } from "../../../components/ui/use-toast";
-import { CallManager } from "../../../lib/webrtc";
-import { getSocket } from "../../../lib/socket";
-import CallModal from "../../../components/ui/call-modal";
+// Defer heavy/possibly cyclic modules to client runtime
+const CallModal = dynamic(() => import("../../../components/ui/call-modal"), { ssr: false });
 
 export default function NewChatPage() {
   const router = useRouter();
@@ -36,13 +36,17 @@ export default function NewChatPage() {
   useEffect(() => {
     if (!accessToken || !user?.id) return;
     
-    const s = getSocket(accessToken);
-    if (!s) {
-      console.error('Failed to get socket connection');
-      return;
-    }
+    let cleanup = () => {};
+    (async () => {
+      const { getSocket } = await import("../../../lib/socket");
+      const { CallManager } = await import("../../../lib/webrtc");
+      const s = getSocket(accessToken);
+      if (!s) {
+        console.error('Failed to get socket connection');
+        return;
+      }
 
-    const cm = new CallManager(s, user.id);
+      const cm = new CallManager(s, user.id);
     
     cm.onIncomingCall = (from, offer) => {
       // Only show call modal if it's from the validated user
@@ -97,15 +101,16 @@ export default function NewChatPage() {
       });
     };
     
-    // Add debug logging
-    console.log('CallManager initialized:', !!cm);
-    setCallManager(cm);
-    
-    return () => {
-      if (cm.currentCall) {
-        cm.endCall();
-      }
-    };
+      // Add debug logging
+      console.log('CallManager initialized:', !!cm);
+      setCallManager(cm);
+      cleanup = () => {
+        if (cm.currentCall) {
+          cm.endCall();
+        }
+      };
+    })();
+    return () => cleanup();
   }, [accessToken, user?.id, toast]); // validatedUser accessed via ref
 
   // Keep a ref in sync with the latest validatedUser
