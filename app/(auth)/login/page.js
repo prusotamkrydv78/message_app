@@ -1,30 +1,47 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api } from "../../../lib/api";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { Phone, Lock, MessageCircle } from "lucide-react";
 import { useAuth } from "../../../lib/auth";
-import Card from "../../../components/ui/card";
-import Input from "../../../components/ui/input";
-import Button from "../../../components/ui/button";
+import { Button } from "../../../components/ui/button";
+import { Input } from "../../../components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card";
 
-export default function LoginPage() {
-  const router = useRouter();
-  const { refreshSession } = useAuth();
+export default function Login() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
-  const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { setUser, setAccessToken } = useAuth();
+  const router = useRouter();
 
-  const onSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
+    if (!phoneNumber || !password) {
+      setError("Please fill in all fields");
+      return;
+    }
+
+    // Validate phone number format
+    if (!/^[0-9]{7,15}$/.test(phoneNumber)) {
+      setError("Please enter a valid phone number (7-15 digits)");
+      return;
+    }
+
     setLoading(true);
+    setError("");
+
     try {
-      await api.login({ phoneNumber, password });
-      await refreshSession();
-      router.replace("/chat");
+      const { api } = await import("../../../lib/api");
+      const response = await api.login({ phoneNumber, password });
+      
+      // Set user and access token from response
+      setUser(response.user);
+      setAccessToken(response.accessToken);
+      
+      router.push("/chat");
     } catch (err) {
       setError(err.message || "Login failed");
     } finally {
@@ -33,67 +50,121 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex-1 grid place-items-center py-8">
-      <Card className="w-full max-w-md p-6">
-        <div className="mb-6 text-center">
-          <div className="mx-auto size-10 rounded-lg bg-black mb-2" />
-          <h1 className="text-2xl font-semibold">Welcome back</h1>
-          <p className="text-sm text-gray-500">Sign in to continue chatting</p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-md"
+      >
+        <div className="text-center mb-8">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+            className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mb-4"
+          >
+            <MessageCircle className="w-8 h-8 text-white" />
+          </motion.div>
+          <motion.h1
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent"
+          >
+            Welcome back
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+            className="text-muted-foreground mt-2"
+          >
+            Sign in to continue your conversations
+          </motion.p>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <label className="block">
-            <span className="block text-[13px] text-gray-700 mb-1">Phone number</span>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-4"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3"/></svg>
-              </span>
-              <input
-                className="w-full h-11 pl-9 pr-3 rounded-md border bg-white/90 focus:outline-none focus:ring-2 focus:ring-black/10"
-                type="tel"
-                inputMode="numeric"
-                placeholder="e.g. 9800000000"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                required
-              />
-            </div>
-          </label>
-
-          <label className="block">
-            <span className="block text-[13px] text-gray-700 mb-1">Password</span>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-4"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 11c.943 0 1.714-.771 1.714-1.714S12.943 7.571 12 7.571 10.286 8.343 10.286 9.286 11.057 11 12 11zm0 0v4.286"/></svg>
-              </span>
-              <input
-                className="w-full h-11 pl-9 pr-10 rounded-md border bg-white/90 focus:outline-none focus:ring-2 focus:ring-black/10"
-                type={showPwd ? "text" : "password"}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              <button type="button" onClick={() => setShowPwd((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 size-8 grid place-items-center rounded-md hover:bg-gray-100" aria-label="Toggle password visibility">
-                {showPwd ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18M10.58 10.58A3 3 0 0112 9a3 3 0 013 3c0 .42-.09.81-.25 1.17M21 12c-2.5 4-6 6-9 6-2.03 0-3.94-.73-5.58-1.96m-2.5-2.26C2.79 12.77 2 12 2 12c2.5-4 6-6 9-6 1.07 0 2.1.18 3.08.5"/></svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12zm11 3a3 3 0 100-6 3 3 0 000 6z"/></svg>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+        >
+          <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
+            <CardHeader className="space-y-1 pb-4">
+              <CardTitle className="text-2xl text-center">Sign in</CardTitle>
+              <CardDescription className="text-center">
+                Enter your credentials to access your account
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="p-3 rounded-lg bg-destructive/10 border border-destructive/20"
+                  >
+                    <p className="text-sm text-destructive text-center">{error}</p>
+                  </motion.div>
                 )}
-              </button>
-            </div>
-          </label>
 
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Signing in..." : "Sign in"}
-          </Button>
-        </form>
+                <div className="space-y-2">
+                  <label htmlFor="phoneNumber" className="text-sm font-medium">
+                    Phone Number
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                    <Input
+                      id="phoneNumber"
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      className="pl-10 h-11"
+                      placeholder="Enter your phone number"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
 
-        <p className="text-sm text-gray-500 mt-4 text-center">
-          Don&apos;t have an account? <Link className="underline" href="/register">Create one</Link>
-        </p>
-      </Card>
+                <div className="space-y-2">
+                  <label htmlFor="password" className="text-sm font-medium">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pl-10 h-11"
+                      placeholder="Enter your password"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full h-11 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium"
+                >
+                  {loading ? "Signing in..." : "Sign in"}
+                </Button>
+              </form>
+
+              <div className="mt-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  Don't have an account?{" "}
+                  <Link href="/register" className="text-primary hover:underline font-medium">
+                    Sign up
+                  </Link>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </motion.div>
     </div>
   );
 }

@@ -2,13 +2,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, Phone, Video, Smile, Paperclip, Send, ChevronDown, MoreVertical } from "lucide-react";
 import { useAuth } from "../../../lib/auth";
 import { api } from "../../../lib/api";
 import EmojiPicker from "emoji-picker-react";
 import { getSocket } from "../../../lib/socket";
 import { CallManager } from "../../../lib/webrtc";
 import CallModal from "../../../components/ui/call-modal";
-import { AnimatePresence, motion } from "framer-motion";
+import { Button } from "../../../components/ui/button";
+import { Avatar, AvatarFallback } from "../../../components/ui/avatar";
+import { ScrollArea } from "../../../components/ui/scroll-area";
 
 function AutoGrowTextarea({ value, onChange, placeholder, onSend, onBlur }) {
   const ref = useRef(null);
@@ -34,50 +38,93 @@ function AutoGrowTextarea({ value, onChange, placeholder, onSend, onBlur }) {
       onKeyDown={onKeyDown}
       placeholder={placeholder}
       rows={1}
-      className="flex-1 resize-none rounded-full px-4 py-2 bg-[#f5f5f5] focus:outline-none focus:ring-2 focus:ring-black/10"
+      className="flex-1 resize-none rounded-2xl px-4 py-3 bg-white border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
     />
   );
 }
 
 function Header({ title, phone, elevated, callManager, callState, otherId, isOnline }) {
+  const getInitials = (name) => {
+    if (!name) return "?";
+    return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+  };
+
   return (
-    <header className={`sticky top-0 z-10 bg-white/95 backdrop-blur ${elevated ? 'shadow-md' : ''}`}>
-      <div className="h-14 px-4 flex items-center justify-between gap-2">
+    <motion.header 
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`sticky top-0 z-10 bg-white/95 backdrop-blur-md border-b transition-shadow duration-200 ${elevated ? 'shadow-lg' : ''}`}
+    >
+      <div className="h-16 px-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Link href="/chat" className="size-10 grid place-items-center rounded-md hover:bg-gray-50" aria-label="Back">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6"/></svg>
+          <Link href="/chat">
+            <Button variant="ghost" size="sm" className="h-10 w-10 p-0">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
           </Link>
-          <div className="size-9 rounded-full bg-gray-200 grid place-items-center text-xs font-medium">
-            {title?.[0] || "U"}
-          </div>
-          <div className="leading-tight">
-            <div className="font-semibold text-[15px] truncate max-w-[40vw] sm:max-w-none">{title}</div>
-            <div className={`text-[12px] ${isOnline ? 'text-emerald-600' : 'text-gray-500'}`}>{isOnline ? 'Online' : 'Offline'}</div>
+          
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Avatar className="h-10 w-10">
+                <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-medium">
+                  {getInitials(title)}
+                </AvatarFallback>
+              </Avatar>
+              {isOnline && (
+                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+              )}
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              <h1 className="font-semibold text-foreground truncate">{title}</h1>
+              <p className="text-sm text-muted-foreground truncate">
+                {isOnline ? "Online" : phone || "Offline"}
+              </p>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button className="size-9 grid place-items-center rounded-full hover:bg-gray-50" aria-label="Video call">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14"/><rect x="3" y="7" width="12" height="10" rx="2"/></svg>
-          </button>
-          <button 
-            onClick={() => callManager?.startCall(otherId)}
-            disabled={!!callState}
-            className="size-9 grid place-items-center rounded-full hover:bg-gray-50 disabled:opacity-50" 
-            aria-label="Voice call"
+        
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-10 w-10 p-0"
+            onClick={() => callManager?.startCall(otherId, false)}
+            disabled={callState !== 'idle'}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.12.9.33 1.78.63 2.63a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.45-1.45a2 2 0 012.11-.45c.85.3 1.73.51 2.63.63A2 2 0 0122 16.92z"/></svg>
-          </button>
+            <Phone className="h-5 w-5" />
+          </Button>
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-10 w-10 p-0"
+            onClick={() => callManager?.startCall(otherId, true)}
+            disabled={callState !== 'idle'}
+          >
+            <Video className="h-5 w-5" />
+          </Button>
+          
+          <Button variant="ghost" size="sm" className="h-10 w-10 p-0">
+            <MoreVertical className="h-5 w-5" />
+          </Button>
         </div>
       </div>
-    </header>
+    </motion.header>
   );
 }
 
 function DayDivider({ label }) {
   return (
-    <div className="py-1 grid place-items-center">
-      <span className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{label}</span>
-    </div>
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="py-2 flex justify-center"
+    >
+      <span className="text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-3 py-1 rounded-full border shadow-sm">
+        {label}
+      </span>
+    </motion.div>
   );
 }
 
@@ -110,32 +157,35 @@ function Message({ mine, text, time, compact, tail, status }) {
     const sizeClass = emojiCount <= 3 ? 'text-5xl' : 'text-2xl';
     return (
       <div className={`w-full flex ${mine ? 'justify-end' : 'justify-start'} ${containerGap}`}>
-        <div className={`relative max-w-[76%] px-1 py-1 ${mine ? 'msg-in-right' : 'msg-in-left'}`}>
+        <div className="relative max-w-[76%] px-1 py-1">
           <div className={`leading-none ${sizeClass}`} style={{ lineHeight: 1 }}>
             {clean}
           </div>
-          {!!time && <div className={`text-[10px] mt-1 ${mine ? 'text-gray-500' : 'text-gray-500'}`}>{time}</div>}
+          {!!time && <div className="text-xs mt-1 text-muted-foreground text-center">{time}</div>}
         </div>
       </div>
     );
   }
 
-  const baseBubble = "max-w-[76%] rounded-2xl px-3 py-2 text-[14px] leading-relaxed";
-  const shadow = compact ? "shadow-none" : mine ? "shadow-[0_6px_18px_rgba(0,0,0,0.10)]" : "shadow-[0_4px_14px_rgba(0,0,0,0.08)]";
-  const colors = mine ? "bg-[#FFC93A] text-black msg-in-right" : "bg-white msg-in-left";
+  const baseBubble = "max-w-[76%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed";
+  const shadow = compact ? "shadow-none" : "shadow-sm";
+  const colors = mine 
+    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white" 
+    : "bg-white border text-foreground";
+  
   return (
     <div className={`w-full flex ${mine ? "justify-end" : "justify-start"} ${containerGap}`}>
-      <div className={`relative ${baseBubble} ${colors} ${shadow}`}>
+      <div className={`relative ${baseBubble} ${colors} ${shadow} transition-all duration-200 hover:shadow-md`}>
         <div className="whitespace-pre-wrap break-words">{text}</div>
         {!!time && (
-          <div className={`text-[10px] mt-1 flex items-center ${mine ? "text-black/70" : "text-gray-500"}`}>
+          <div className={`text-xs mt-1.5 flex items-center ${mine ? "text-white/80" : "text-muted-foreground"}`}>
             <span>{time}</span>
             {mine && <Tick state={status} />}
           </div>
         )}
-        {tail && (
+        {tail && !compact && (
           <span
-            className={`absolute bottom-0 ${mine ? 'right-0 translate-x-2' : 'left-0 -translate-x-2'} translate-y-1 w-3 h-3 rounded-bl-[10px] rounded-tr-[10px] ${mine ? 'bg-[#FFC93A]' : 'bg-white'} ${compact ? 'opacity-0' : 'opacity-100'} shadow-[inherit]`}
+            className={`absolute bottom-0 ${mine ? 'right-0 translate-x-2' : 'left-0 -translate-x-2'} translate-y-1 w-3 h-3 ${mine ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-white border-l border-b'} transform rotate-45`}
           />
         )}
       </div>
@@ -397,120 +447,151 @@ export default function ConversationPage({ params }) {
   if (loading || !user) return null;
 
   return (
-    <div className="flex-1 flex flex-col bg-white">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex flex-col">
       <Header title={title} phone={phone} elevated={headerElevated} callManager={callManager} callState={callState} otherId={otherId} isOnline={isOnline} />
 
       {/* Messages list */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll no-scrollbar px-3 py-2 pb-28 max-h-[calc(100vh-128px)] space-y-1">
-        <AnimatePresence initial={false}>
-          {groups.map((g, idx) => {
-            if (g.type === "divider") return <DayDivider key={g.key} label={g.label} />;
-            const prev = groups[idx - 1];
-            const compact = prev && prev.type === "message" && prev.m.mine === g.m.mine;
-            return (
-              <motion.div
-                key={g.key}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-                layout
-              >
-                <Message
-                  mine={g.m.mine}
-                  text={g.m.text}
-                  time={g.m.isLastInGroup ? new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(g.m.ts) : ""}
-                  compact={compact}
-                  tail={g.m.isLastInGroup}
-                  status={g.m.status}
-                />
-              </motion.div>
-            );
-          })}
-          <AnimatePresence>
-            {typing && (
-              <motion.div
-                key="typing"
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.15 }}
-                className="w-full flex justify-start"
-              >
-                <div className="bg-gray-100 rounded-2xl px-2.5 py-1.5 shadow-sm inline-flex items-center gap-2">
-                  <span className="inline-flex gap-1">
-                    <span className="size-1.5 bg-gray-500/70 rounded-full animate-bounce [animation-delay:-0.2s]"></span>
-                    <span className="size-1.5 bg-gray-500/70 rounded-full animate-bounce [animation-delay:-0.1s]"></span>
-                    <span className="size-1.5 bg-gray-500/70 rounded-full animate-bounce"></span>
-                  </span>
-                </div>
-              </motion.div>
-            )}
+      <ScrollArea className="flex-1 px-4 py-2">
+        <div ref={scrollRef} className="space-y-1 pb-4">
+          <AnimatePresence initial={false}>
+            {groups.map((g, idx) => {
+              if (g.type === "divider") return <DayDivider key={g.key} label={g.label} />;
+              const prev = groups[idx - 1];
+              const compact = prev && prev.type === "message" && prev.m.mine === g.m.mine;
+              return (
+                <motion.div
+                  key={g.key}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18 }}
+                  layout
+                >
+                  <Message
+                    mine={g.m.mine}
+                    text={g.m.text}
+                    time={g.m.isLastInGroup ? new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(g.m.ts) : ""}
+                    compact={compact}
+                    tail={g.m.isLastInGroup}
+                    status={g.m.status}
+                  />
+                </motion.div>
+              );
+            })}
+            <AnimatePresence>
+              {typing && (
+                <motion.div
+                  key="typing"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.15 }}
+                  className="w-full flex justify-start"
+                >
+                  <div className="bg-white/80 backdrop-blur-sm rounded-2xl px-3 py-2 shadow-sm inline-flex items-center gap-2 border">
+                    <span className="inline-flex gap-1">
+                      <span className="size-1.5 bg-muted-foreground/70 rounded-full animate-bounce [animation-delay:-0.2s]"></span>
+                      <span className="size-1.5 bg-muted-foreground/70 rounded-full animate-bounce [animation-delay:-0.1s]"></span>
+                      <span className="size-1.5 bg-muted-foreground/70 rounded-full animate-bounce"></span>
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </AnimatePresence>
-        </AnimatePresence>
-      </div>
+        </div>
+      </ScrollArea>
 
       {/* Composer */}
-      <form
-        onSubmit={(e) => { e.preventDefault(); send(); }}
-        className="sticky bottom-0 z-10 p-2.5 flex items-center gap-2 bg-white/95 backdrop-blur shadow-[0_-4px_16px_rgba(0,0,0,0.06)]"
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="sticky bottom-0 z-10 p-4 bg-white/95 backdrop-blur-md border-t"
       >
-        {/* Desktop-only Emoji button */}
-        {!isMobile && (
-          <div className="relative">
-            <button type="button" onClick={() => setShowEmojis((v) => !v)} className="size-9 grid place-items-center rounded-full hover:bg-gray-50" aria-label="Emoji picker">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 20a8 8 0 100-16 8 8 0 000 16zm-3-6s1 2 3 2 3-2 3-2M9 9h.01M15 9h.01"/></svg>
-            </button>
-            {showEmojis && (
-              <div className="absolute bottom-12 left-0 z-20 w-[300px] bg-white border rounded-xl shadow-lg overflow-hidden" onMouseLeave={() => setShowEmojis(false)}>
-                <EmojiPicker
-                  onEmojiClick={(emojiData) => { setInput((prev) => `${prev}${emojiData.emoji}`); }}
-                  autoFocusSearch={false}
-                  searchDisabled
-                  skinTonesDisabled
-                  lazyLoadEmojis
-                  width={300}
-                  height={360}
-                  previewConfig={{ showPreview: false }}
-                  theme="light"
-                />
-              </div>
-            )}
-          </div>
-        )}
-        <button type="button" className="size-9 grid place-items-center rounded-full hover:bg-gray-50" aria-label="Attach">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M21.44 11.05l-8.49 8.49a3.5 3.5 0 114.95 4.95l-8.49 8.49a1.5 1.5 0 11-2.12-2.12l7.78-7.78"/></svg>
-        </button>
-        <AutoGrowTextarea
-          value={input}
-          onChange={handleInputChange}
-          placeholder="Type a message"
-          onSend={send}
-          onBlur={() => socketRef.current?.emit('typing', { to: otherId, isTyping: false })}
-        />
-
-        <button
-          type="submit"
-          className={`size-10 grid place-items-center rounded-full text-white active:scale-95 transition-transform ${input.trim() ? 'bg-black' : 'bg-gray-400 cursor-not-allowed'}`}
-          disabled={!input.trim()}
-          aria-label="Send"
-          title="Send"
+        <form
+          onSubmit={(e) => { e.preventDefault(); send(); }}
+          className="flex items-end gap-3 max-w-4xl mx-auto"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="size-5">
-            <path d="M3.4 2.6a1 1 0 00-1.3 1.28l3.07 8.2a1 1 0 01.02.63l-3.07 8.2A1 1 0 003.4 22l17.96-8.51a1 1 0 000-1.98L3.4 2.6zm5.43 8.22L6 6.3l9.74 4.19-6.91.33z" />
-          </svg>
-        </button>
-      </form>
+          {/* Desktop-only Emoji button */}
+          {!isMobile && (
+            <div className="relative">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowEmojis((v) => !v)}
+                className="h-10 w-10"
+              >
+                <Smile className="h-5 w-5" />
+              </Button>
+              {showEmojis && (
+                <div className="absolute bottom-12 left-0 z-20 w-[300px] bg-white border rounded-xl shadow-lg overflow-hidden" onMouseLeave={() => setShowEmojis(false)}>
+                  <EmojiPicker
+                    onEmojiClick={(emojiData) => { setInput((prev) => `${prev}${emojiData.emoji}`); }}
+                    autoFocusSearch={false}
+                    searchDisabled
+                    skinTonesDisabled
+                    lazyLoadEmojis
+                    width={300}
+                    height={360}
+                    previewConfig={{ showPreview: false }}
+                    theme="light"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10"
+          >
+            <Paperclip className="h-5 w-5" />
+          </Button>
+          
+          <div className="flex-1 relative">
+            <AutoGrowTextarea
+              value={input}
+              onChange={handleInputChange}
+              placeholder="Type a message..."
+              onSend={send}
+              onBlur={() => socketRef.current?.emit('typing', { to: otherId, isTyping: false })}
+            />
+          </div>
+
+          <Button
+            type="submit"
+            size="icon"
+            className={`h-10 w-10 rounded-full transition-all ${
+              input.trim() 
+                ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg' 
+                : 'bg-muted text-muted-foreground cursor-not-allowed'
+            }`}
+            disabled={!input.trim()}
+          >
+            <Send className="h-5 w-5" />
+          </Button>
+        </form>
+      </motion.div>
 
       {/* Scroll-to-bottom button when not at bottom */}
       {!atBottom && (
-        <button
-          onClick={() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight + 1000; }}
-          className="absolute right-4 bottom-20 size-10 rounded-full bg-black text-white grid place-items-center shadow-md active:scale-95"
-          aria-label="Scroll to bottom"
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          className="fixed right-4 bottom-24 z-20"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m0 0l-6-6m6 6l6-6"/></svg>
-        </button>
+          <Button
+            onClick={() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight + 1000; }}
+            size="icon"
+            className="h-10 w-10 rounded-full bg-white/90 backdrop-blur-sm border shadow-lg hover:shadow-xl text-foreground hover:bg-white"
+          >
+            <ChevronDown className="h-5 w-5" />
+          </Button>
+        </motion.div>
       )}
 
       {/* Call Modal */}
