@@ -9,6 +9,7 @@ import { getSocket } from "../../../lib/socket";
 import { CallManager, VideoCallManager } from "../../../lib/webrtc";
 import CallModal from "../../../components/ui/call-modal";
 import VideoCallModal from "../../../components/ui/video-call-modal";
+import CallRecord from "../../../components/ui/call-record";
 import { AnimatePresence, motion } from "framer-motion";
 
 function AutoGrowTextarea({ value, onChange, placeholder, onSend, onBlur }) {
@@ -295,6 +296,7 @@ export default function ConversationPage({ params }) {
   const [typing, setTyping] = useState(false);
   const typingClearRef = useRef(null);
   const [messages, setMessages] = useState([]); // each: {id, mine, text, ts, status}
+  const [callRecords, setCallRecords] = useState([]); // call records
   const socketRef = useRef(null);
   const seenRef = useRef(new Set()); // tracks _id or clientId to prevent duplicates
   const scrollRef = useRef(null);
@@ -330,6 +332,38 @@ export default function ConversationPage({ params }) {
     };
   }, []);
 
+  // Function to refresh chat data
+  const refreshChatData = async () => {
+    if (!accessToken || !otherId || !user?.id) return;
+    try {
+      const res = await api.messagesWith(accessToken, otherId);
+      
+      const mapped = (res.messages || []).map((m, idx) => ({
+        id: m._id || idx,
+        mine: String(m.sender) === String(user?.id),
+        text: m.text,
+        ts: new Date(m.createdAt).getTime(),
+        status: String(m.sender) === String(user?.id) ? 'sent' : undefined,
+      }));
+      setMessages(mapped);
+
+      // Map call records
+      const callsMapped = (res.calls || []).map((c, idx) => ({
+        id: c._id || `call-${idx}`,
+        type: c.type, // 'voice' | 'video'
+        status: c.status, // 'missed' | 'answered' | 'declined' | 'ended'
+        duration: c.duration,
+        mine: String(c.caller) === String(user?.id),
+        ts: new Date(c.createdAt).getTime(),
+        callerName: title,
+      }));
+      
+      setCallRecords(callsMapped);
+    } catch (error) {
+      console.error('Error refreshing chat data:', error);
+    }
+  };
+
   // Fetch history
   useEffect(() => {
     let active = true;
@@ -347,27 +381,22 @@ export default function ConversationPage({ params }) {
           setConvoStatus('accepted');
           setRequestedBy(null);
         }
-        const res = await api.messagesWith(accessToken, otherId);
-        if (!active) return;
-        const mapped = (res.messages || []).map((m, idx) => ({
-          id: m._id || idx,
-          mine: String(m.sender) === String(user?.id),
-          text: m.text,
-          ts: new Date(m.createdAt).getTime(),
-          status: String(m.sender) === String(user?.id) ? 'sent' : undefined,
-        }));
-        setMessages(mapped);
-      } catch {}
+        
+        // Use the refresh function for initial load
+        await refreshChatData();
+      } catch (error) {
+        console.error('Error fetching messages/calls:', error);
+      }
     })();
     return () => { active = false; };
-  }, [accessToken, otherId, user?.id]);
+  }, [accessToken, otherId, user?.id, title]);
 
   // Initialize call manager
   useEffect(() => {
     if (!accessToken || !user?.id) return;
     const s = getSocket(accessToken);
-    const cm = new CallManager(s, user.id);
-    const vcm = new VideoCallManager(s, user.id);
+    const cm = new CallManager(s, user.id, accessToken);
+    const vcm = new VideoCallManager(s, user.id, accessToken);
     
     // Voice call handlers
     cm.onIncomingCall = (from, offer) => {
@@ -389,6 +418,10 @@ export default function ConversationPage({ params }) {
       }
       if (status === 'ended' || status === 'declined') {
         setCallState(null);
+        // Refresh chat data to show new call record
+        setTimeout(() => {
+          refreshChatData();
+        }, 1000);
       }
     };
     
@@ -419,6 +452,10 @@ export default function ConversationPage({ params }) {
       }
       if (status === 'ended' || status === 'declined') {
         setVideoCallState(null);
+        // Refresh chat data to show new call record
+        setTimeout(() => {
+          refreshChatData();
+        }, 1000);
       }
     };
     
@@ -574,25 +611,40 @@ export default function ConversationPage({ params }) {
     setInput("");
   };
 
+  const combinedItems = useMemo(() => {
+    const combined = [
+      ...messages.map(m => ({ ...m, itemType: 'message' })),
+      ...callRecords.map(c => ({ ...c, itemType: 'call' }))
+    ];
+    // Sort by timestamp in ascending order (oldest first)
+    return combined.sort((a, b) => a.ts - b.ts);
+  }, [messages, callRecords]);
+
   const groups = useMemo(() => {
-    // Group by day for divider
+    // Combine messages and call records, then sort by timestamp
     const fmt = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" });
     const out = [];
     let lastDay = "";
-    for (let i = 0; i < messages.length; i++) {
-      const m = messages[i];
-      const day = fmt.format(m.ts);
+    
+    for (let i = 0; i < combinedItems.length; i++) {
+      const item = combinedItems[i];
+      const day = fmt.format(item.ts);
       if (day !== lastDay) {
-        out.push({ type: "divider", key: `d-${day}-${m.id || out.length}`, label: day });
+        out.push({ type: "divider", key: `d-${day}-${item.id || out.length}`, label: day });
         lastDay = day;
       }
-      // Determine if next message is from same sender
-      const next = messages[i + 1];
-      const isLastInGroup = !next || next.mine !== m.mine;
-      out.push({ type: "message", key: `m-${m.id}`, m: { ...m, isLastInGroup } });
+      
+      if (item.itemType === 'message') {
+        // Determine if next message is from same sender
+        const next = combinedItems[i + 1];
+        const isLastInGroup = !next || next.itemType !== 'message' || next.mine !== item.mine;
+        out.push({ type: "message", key: `m-${item.id}`, m: { ...item, isLastInGroup } });
+      } else if (item.itemType === 'call') {
+        out.push({ type: "call", key: `c-${item.id}`, call: item });
+      }
     }
     return out;
-  }, [messages]);
+  }, [messages, callRecords]);
 
   if (loading || !user) return null;
 
@@ -642,6 +694,29 @@ export default function ConversationPage({ params }) {
         <AnimatePresence initial={false}>
           {groups.map((g, idx) => {
             if (g.type === "divider") return <DayDivider key={g.key} label={g.label} />;
+            
+            if (g.type === "call") {
+              return (
+                <motion.div
+                  key={g.key}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18 }}
+                  layout
+                >
+                  <CallRecord
+                    type={g.call.type}
+                    status={g.call.status}
+                    duration={g.call.duration}
+                    time={new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(g.call.ts)}
+                    mine={g.call.mine}
+                    callerName={g.call.callerName}
+                  />
+                </motion.div>
+              );
+            }
+            
             const prev = groups[idx - 1];
             const compact = prev && prev.type === "message" && prev.m.mine === g.m.mine;
             return (

@@ -171,8 +171,10 @@ export default function CallModal({
   );
 
   return (
-    <AnimatePresence>
-      {isOpen && <FullScreenModal />}
+    <AnimatePresence mode="wait">
+      {isOpen && (
+        <FullScreenModal key="call-modal" />
+      )}
     </AnimatePresence>
   );
 }

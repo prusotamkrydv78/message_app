@@ -290,13 +290,13 @@ export default function VideoCallModal({
   );
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {isOpen && (
         <>
           {isMinimized && status === 'connected' ? (
-            <MinimizedCall />
+            <MinimizedCall key="minimized-call" />
           ) : (
-            <FullScreenVideoCall />
+            <FullScreenVideoCall key="fullscreen-call" />
           )}
         </>
       )}
