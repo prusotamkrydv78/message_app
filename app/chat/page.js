@@ -100,8 +100,11 @@ export default function ChatPage() {
 
   useEffect(() => {
     const onNew = async (e) => {
-      const { otherId } = e.detail || {};
-      setUnread((prev) => ({ ...prev, [otherId]: (prev[otherId] || 0) + 1 }));
+      const { otherId, isInThisChat } = e.detail || {};
+      // Only increment unread if the message is not for the currently open conversation tab
+      if (!isInThisChat) {
+        setUnread((prev) => ({ ...prev, [otherId]: (prev[otherId] || 0) + 1 }));
+      }
       if (accessToken) {
         try {
           const res = await api.conversations(accessToken);
@@ -109,8 +112,17 @@ export default function ChatPage() {
         } catch {}
       }
     };
+    const onClear = (e) => {
+      const { otherId } = e.detail || {};
+      if (!otherId) return;
+      setUnread((prev) => ({ ...prev, [otherId]: 0 }));
+    };
     window.addEventListener("chat:new-message", onNew);
-    return () => window.removeEventListener("chat:new-message", onNew);
+    window.addEventListener("chat:clear-unread", onClear);
+    return () => {
+      window.removeEventListener("chat:new-message", onNew);
+      window.removeEventListener("chat:clear-unread", onClear);
+    };
   }, [accessToken]);
 
   const getInitials = (name) => {

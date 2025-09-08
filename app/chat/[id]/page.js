@@ -355,20 +355,27 @@ export default function ConversationPage({ params }) {
     (async () => {
       const { getSocket } = await import("../../../lib/socket");
       s = getSocket(accessToken);
-    socketRef.current = s;
-    // request presence for header indicator
-    s.emit('presence_request', { userId: otherId });
-    const onPresence = ({ userId: uid, status }) => {
-      if (String(uid) === String(otherId)) setIsOnline(status === 'online');
-    };
-    s.on('presence_update', onPresence);
-    s.on("receive_message", (msg) => {
-      // Only append if it's part of this chat
-      const involves = [msg.sender, msg.recipient].map(String);
-      if (involves.includes(String(user?.id)) && involves.includes(String(otherId))) {
+      socketRef.current = s;
+      // request presence for header indicator
+      s.emit('presence_request', { userId: otherId });
+      // Clear unread counter for this conversation as we're viewing it
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('chat:clear-unread', { detail: { otherId } }));
+      }
+      const onPresence = ({ userId: uid, status }) => {
+        if (String(uid) === String(otherId)) setIsOnline(status === 'online');
+      };
+      s.on('presence_update', onPresence);
+
+      s.on("receive_message", (msg) => {
+        // Only handle if it's part of this chat
+        const involves = [msg.sender, msg.recipient].map(String);
+        if (!(involves.includes(String(user?.id)) && involves.includes(String(otherId)))) return;
+
         const key = String(msg.clientId || msg._id);
         if (seenRef.current.has(key)) return; // already handled
         seenRef.current.add(key);
+
         setMessages((prev) => {
           // Reconcile optimistic message if clientId matches
           if (msg.clientId) {
@@ -390,35 +397,37 @@ export default function ConversationPage({ params }) {
         if (String(msg.recipient) === String(user?.id)) {
           s.emit('mark_seen', { otherId: msg.sender, ids: [msg._id] });
         }
-      }
-    });
-
-    // Update seen status for my outgoing messages
-    s.on('messages_seen', ({ by, ids = [] }) => {
-      if (String(by) !== String(otherId)) return;
-      setMessages((prev) => prev.map(m => (ids.includes(m.id) ? { ...m, status: 'seen' } : m)));
-    });
-    s.on("typing", ({ from, isTyping }) => {
-      if (String(from) !== String(otherId)) return;
-      if (typingClearRef.current) {
-        clearTimeout(typingClearRef.current);
-        typingClearRef.current = null;
-      }
-      if (isTyping) {
-        setTyping(true);
-        // keep indicator visible at least ~1.8s after last "true"
-        typingClearRef.current = setTimeout(() => {
-          setTyping(false);
-          typingClearRef.current = null;
-        }, 1800);
-        // nudge scroll to bottom so indicator is visible
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight + 1000;
+        // Clear unread as message is visible in this open chat
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('chat:clear-unread', { detail: { otherId } }));
         }
-      } else {
-        setTyping(false);
-      }
-    });
+      });
+
+      s.on('messages_seen', ({ by, ids = [] }) => {
+        if (String(by) !== String(otherId)) return;
+        setMessages((prev) => prev.map(m => (ids.includes(m.id) ? { ...m, status: 'seen' } : m)));
+      });
+      s.on("typing", ({ from, isTyping }) => {
+        if (String(from) !== String(otherId)) return;
+        if (typingClearRef.current) {
+          clearTimeout(typingClearRef.current);
+          typingClearRef.current = null;
+        }
+        if (isTyping) {
+          setTyping(true);
+          // keep indicator visible at least ~1.8s after last "true"
+          typingClearRef.current = setTimeout(() => {
+            setTyping(false);
+            typingClearRef.current = null;
+          }, 1800);
+          // nudge scroll to bottom so indicator is visible
+          if (viewportRef.current) {
+            viewportRef.current.scrollTop = viewportRef.current.scrollHeight + 1000;
+          }
+        } else {
+          setTyping(false);
+        }
+      });
       cleanup = () => {
         if (s) {
           s.off("receive_message");
@@ -540,7 +549,7 @@ export default function ConversationPage({ params }) {
               );
             })}
             <AnimatePresence>
-              {typing && (
+              {typing && atBottom && (
                 <motion.div
                   key="typing"
                   initial={{ opacity: 0, y: 4 }}
