@@ -21,7 +21,7 @@ function AutoGrowTextarea({ value, onChange, placeholder, onSend, onBlur, inputR
     if (!ref.current) return;
     ref.current.style.height = "auto";
     ref.current.style.height = Math.min(ref.current.scrollHeight, 160) + "px";
-  }, [value]);
+  }, [value, ref]);
 
   const onKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {

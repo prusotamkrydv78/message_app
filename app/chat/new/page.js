@@ -50,7 +50,7 @@ export default function NewChatPage() {
     } finally {
       setIsValidating(false);
     }
-  }, [accessToken, countryCode, phoneNumber, toast, user?.id]);
+  }, [accessToken, countryCode, phoneNumber, toast, user?.id, user?._id]);
 
   const sendRequest = useCallback(async () => {
     if (!accessToken || !foundUser) return;
