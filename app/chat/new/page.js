@@ -95,7 +95,7 @@ export default function NewChatPage() {
   if (!user) return null;
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-blue-50 to-purple-50">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-orange-50 to-red-50">
       {/* Header */}
       <motion.header
         initial={{ opacity: 0, y: -20 }}
@@ -105,11 +105,11 @@ export default function NewChatPage() {
       >
         <div className="h-16 px-3 sm:px-4 flex items-center justify-between">
           <Link href="/chat">
-            <Button variant="ghost" size="sm" className="h-9 w-9 sm:h-10 sm:w-10 p-0">
-              <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+            <Button variant="ghost" size="sm" className="h-9 w-9 sm:h-10 sm:w-10 p-0 hover:bg-orange-50">
+              <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 text-orange-600" />
             </Button>
           </Link>
-          <h1 className="text-lg sm:text-xl font-semibold text-foreground">New Chat</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-orange-900">New Chat</h1>
           <div className="w-9 sm:w-10"></div>
         </div>
       </motion.header>
@@ -120,7 +120,7 @@ export default function NewChatPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
+          <Card className="border-0 shadow-lg bg-white/90 backdrop-blur-sm border border-orange-100">
             <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               <div>
                 <h2 className="text-lg sm:text-xl font-semibold mb-2">Add by Phone Number</h2>
@@ -149,7 +149,7 @@ export default function NewChatPage() {
                 <Button 
                   onClick={validatePhone} 
                   disabled={isValidating} 
-                  className="h-10 sm:h-11 min-w-20 sm:min-w-24 text-sm sm:text-base"
+                  className="h-10 sm:h-11 min-w-20 sm:min-w-24 text-sm sm:text-base bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
                 >
                   {isValidating ? "Checking..." : "Check"}
                 </Button>
@@ -160,7 +160,7 @@ export default function NewChatPage() {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="border rounded-lg p-3 sm:p-4 bg-green-50"
+                  className="border border-orange-100 rounded-lg p-3 sm:p-4 bg-orange-50/80 backdrop-blur-sm"
                 >
                   <div className="flex items-center gap-3">
                     <Avatar className="w-10 h-10 sm:w-12 sm:h-12">
@@ -175,7 +175,7 @@ export default function NewChatPage() {
                     <Button 
                       onClick={sendRequest} 
                       disabled={isRequesting}
-                      className="h-9 sm:h-10 text-xs sm:text-sm px-3 sm:px-4"
+                      className="h-9 sm:h-10 text-xs sm:text-sm px-3 sm:px-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
                     >
                       {isRequesting ? "Sending..." : "Send Request"}
                     </Button>
