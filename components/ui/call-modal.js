@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./button";
 import { Avatar, AvatarFallback } from "./avatar";
@@ -33,11 +33,16 @@ export default function CallModal({
   onDecline, 
   onEndCall,
   onToggleMute,
-  isVideo = false
+  onToggleVideo,
+  isVideo = false,
+  localStream,
+  remoteStream,
 }) {
   const [muted, setMuted] = useState(false);
   const [videoOff, setVideoOff] = useState(false);
   const [duration, setDuration] = useState(0);
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
 
   useEffect(() => {
     let interval;
@@ -63,8 +68,28 @@ export default function CallModal({
   };
 
   const handleVideoToggle = () => {
-    setVideoOff(!videoOff);
+    const newOff = onToggleVideo?.();
+    setVideoOff(newOff ?? !videoOff);
   };
+
+  // Attach streams to <video> when present
+  useEffect(() => {
+    if (!isVideo) return;
+    if (remoteVideoRef.current && remoteStream) {
+      try {
+        if (remoteVideoRef.current.srcObject !== remoteStream) {
+          remoteVideoRef.current.srcObject = remoteStream;
+        }
+      } catch {}
+    }
+    if (localVideoRef.current && localStream) {
+      try {
+        if (localVideoRef.current.srcObject !== localStream) {
+          localVideoRef.current.srcObject = localStream;
+        }
+      } catch {}
+    }
+  }, [isVideo, localStream, remoteStream]);
 
   const getInitials = (name) => {
     if (!name) return "U";
@@ -89,121 +114,109 @@ export default function CallModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+        className="fixed inset-0 z-50 bg-black/90 sm:bg-black/70 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4"
       >
         <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
+          initial={{ scale: 0.98, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-white/95 backdrop-blur-md rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl border"
+          exit={{ scale: 0.98, opacity: 0 }}
+          className={`relative w-full h-full sm:h-auto sm:w-full ${isVideo ? 'sm:max-w-4xl' : 'sm:max-w-sm'} bg-white/95 sm:rounded-3xl text-center shadow-2xl border overflow-hidden`}
         >
-          {/* Avatar */}
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
-            className="mb-6"
-          >
-            <Avatar className="w-24 h-24 mx-auto border-4 border-white shadow-lg">
-              <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-2xl font-bold">
-                {getInitials(callerName)}
-              </AvatarFallback>
-            </Avatar>
-          </motion.div>
+          {isVideo ? (
+            <div className="relative bg-black h-full sm:h-auto">
+              {/* Remote video */}
+              <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-[calc(100vh-180px)] sm:h-[420px] object-cover bg-black" />
+              {/* Local video pip */}
+              <video ref={localVideoRef} autoPlay muted playsInline className="absolute bottom-24 right-4 sm:bottom-4 w-28 h-18 sm:w-40 sm:h-24 object-cover rounded-lg shadow-lg border border-white/20 bg-black" />
 
-          {/* Name and Status */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="mb-8"
-          >
-            <h2 className="text-2xl font-bold text-foreground mb-2">
-              {callerName || "Unknown"}
-            </h2>
-            <p className="text-muted-foreground flex items-center justify-center gap-2">
-              {isVideo && <IconVideo className="w-4 h-4" />}
-              {!isVideo && <IconPhone className="w-4 h-4" />}
-              {getStatusText()}
-            </p>
-          </motion.div>
-
-          {/* Action Buttons */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="flex justify-center items-center gap-4"
-          >
-            {type === 'incoming' && status === 'ringing' && (
-              <>
-                <Button
-                  onClick={onDecline}
-                  size="lg"
-                  className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg hover:shadow-xl transition-all"
+              {/* Bottom panel for mobile */}
+              <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t sm:static sm:bg-transparent">
+                {/* Name + status */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="py-4"
                 >
-                  <IconPhoneOff className="w-8 h-8" />
-                </Button>
-                <Button
-                  onClick={onAnswer}
-                  size="lg"
-                  className="w-16 h-16 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-lg hover:shadow-xl transition-all"
-                >
-                  <IconPhone className="w-8 h-8" />
-                </Button>
-              </>
-            )}
+                  <h2 className="text-lg sm:text-2xl font-bold text-foreground">{callerName || 'Unknown'}</h2>
+                  <p className="text-muted-foreground flex items-center justify-center gap-2 text-sm sm:text-base">
+                    <IconVideo className="w-4 h-4" />
+                    {getStatusText()}
+                  </p>
+                </motion.div>
 
-            {(type === 'outgoing' || status === 'connected') && (
-              <>
-                {status === 'connected' && (
-                  <>
-                    <Button
-                      onClick={handleMute}
-                      size="lg"
-                      variant={muted ? "destructive" : "secondary"}
-                      className="w-14 h-14 rounded-full shadow-lg hover:shadow-xl transition-all"
-                    >
-                      {muted ? <IconMicOff className="w-6 h-6" /> : <IconMic className="w-6 h-6" />}
-                    </Button>
-                    
-                    {isVideo && (
-                      <Button
-                        onClick={handleVideoToggle}
-                        size="lg"
-                        variant={videoOff ? "destructive" : "secondary"}
-                        className="w-14 h-14 rounded-full shadow-lg hover:shadow-xl transition-all"
-                      >
-                        {videoOff ? <IconVideoOff className="w-6 h-6" /> : <IconVideo className="w-6 h-6" />}
+                {/* Controls */}
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.15 }}
+                  className="flex justify-center items-center gap-4 pb-6"
+                >
+                  {type === 'incoming' && status === 'ringing' ? (
+                    <>
+                      <Button onClick={onDecline} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg">
+                        <IconPhoneOff className="w-7 h-7 sm:w-8 sm:h-8" />
                       </Button>
-                    )}
-                  </>
-                )}
-                
-                <Button
-                  onClick={onEndCall}
-                  size="lg"
-                  className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg hover:shadow-xl transition-all"
-                >
-                  <IconPhoneOff className="w-8 h-8" />
-                </Button>
-              </>
-            )}
-          </motion.div>
-
-          {/* Connection indicator */}
-          {status === 'calling' && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mt-6 flex justify-center"
-            >
-              <div className="flex gap-1">
-                <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
+                      <Button onClick={onAnswer} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-lg">
+                        <IconPhone className="w-7 h-7 sm:w-8 sm:h-8" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      {status === 'connected' && (
+                        <>
+                          <Button onClick={handleMute} variant={muted ? 'destructive' : 'secondary'} className="w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg">
+                            {muted ? <IconMicOff className="w-5 h-5 sm:w-6 sm:h-6" /> : <IconMic className="w-5 h-5 sm:w-6 sm:h-6" />}
+                          </Button>
+                          <Button onClick={handleVideoToggle} variant={videoOff ? 'destructive' : 'secondary'} className="w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg">
+                            {videoOff ? <IconVideoOff className="w-5 h-5 sm:w-6 sm:h-6" /> : <IconVideo className="w-5 h-5 sm:w-6 sm:h-6" />}
+                          </Button>
+                        </>
+                      )}
+                      <Button onClick={onEndCall} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg">
+                        <IconPhoneOff className="w-7 h-7 sm:w-8 sm:h-8" />
+                      </Button>
+                    </>
+                  )}
+                </motion.div>
               </div>
-            </motion.div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-10">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+                className="mb-6"
+              >
+                <Avatar className="w-24 h-24 mx-auto border-4 border-white shadow-lg">
+                  <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-2xl font-bold">
+                    {getInitials(callerName)}
+                  </AvatarFallback>
+                </Avatar>
+              </motion.div>
+              <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-2">{callerName || 'Unknown'}</h2>
+              <p className="text-muted-foreground flex items-center justify-center gap-2 mb-6">
+                <IconPhone className="w-4 h-4" />
+                {getStatusText()}
+              </p>
+              <div className="flex justify-center items-center gap-4">
+                {type === 'incoming' && status === 'ringing' ? (
+                  <>
+                    <Button onClick={onDecline} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg">
+                      <IconPhoneOff className="w-8 h-8" />
+                    </Button>
+                    <Button onClick={onAnswer} className="w-16 h-16 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-lg">
+                      <IconPhone className="w-8 h-8" />
+                    </Button>
+                  </>
+                ) : (
+                  <Button onClick={onEndCall} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg">
+                    <IconPhoneOff className="w-8 h-8" />
+                  </Button>
+                )}
+              </div>
+            </div>
           )}
         </motion.div>
       </motion.div>

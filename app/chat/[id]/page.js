@@ -39,8 +39,60 @@ function AutoGrowTextarea({ value, onChange, placeholder, onSend, onBlur, inputR
       onKeyDown={onKeyDown}
       placeholder={placeholder}
       rows={1}
-      className="flex-1 resize-none rounded-2xl px-4 py-3 bg-white border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+      className="flex-1 resize-none rounded-full px-4 py-2 bg-white/80 border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors shadow-sm"
     />
+  );
+}
+
+// Coalesce duplicate/near-duplicate call entries
+function coalesceCallItems(items) {
+  const out = [];
+  const windowMs = 60 * 1000; // 60s window to consider duplicates
+  const precedence = { ended: 3, declined: 2, missed: 1 };
+  for (const it of items) {
+    if (it.type !== 'call') { out.push(it); continue; }
+    // find last call within window with same direction/isVideo
+    const last = out.length ? out[out.length - 1] : null;
+    if (
+      last && last.type === 'call' &&
+      Math.abs(last.ts - it.ts) <= windowMs &&
+      last.direction === it.direction &&
+      last.isVideo === it.isVideo
+    ) {
+      // merge: keep highest outcome precedence and max duration; prefer latest time stamp
+      const keep = { ...last };
+      if ((precedence[it.outcome] || 0) > (precedence[last.outcome] || 0)) keep.outcome = it.outcome;
+      keep.durationSec = Math.max(keep.durationSec || 0, it.durationSec || 0);
+      keep.ts = Math.max(keep.ts, it.ts);
+      out[out.length - 1] = keep;
+    } else {
+      out.push(it);
+    }
+  }
+  return out;
+}
+
+function CallEntry({ direction, isVideo, outcome, durationSec, time }) {
+  const Icon = isVideo ? Video : Phone;
+  const base = direction === 'outgoing' ? 'You started a' : 'Incoming';
+  const kind = isVideo ? 'video call' : 'voice call';
+  const status = outcome === 'ended' && durationSec > 0
+    ? `${Math.floor(durationSec / 60)}:${String(durationSec % 60).padStart(2, '0')}`
+    : outcome === 'declined'
+      ? 'Declined'
+      : 'Missed';
+  return (
+    <div className="w-full flex justify-center my-2">
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border bg-white text-xs text-muted-foreground shadow-sm">
+        <Icon className="h-3.5 w-3.5" />
+        <span>{base} {kind}</span>
+        <span className="opacity-70">•</span>
+        <span className="font-medium">{status}</span>
+        {!!time && (
+          <span className="opacity-70">• {time}</span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -221,6 +273,8 @@ export default function ConversationPage({ params }) {
   const composerRef = useRef(null);
   const [isOnline, setIsOnline] = useState(null);
   const typingEmitRef = useRef(null);
+  const callMetaRef = useRef({ direction: null, isVideo: false, startedAt: null, connected: false, logged: false });
+  const lastPersistRef = useRef(0);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -254,6 +308,7 @@ export default function ConversationPage({ params }) {
       if (!accessToken || !otherId) return;
       try {
         const res = await api.messagesWith(accessToken, otherId);
+        const callsRes = await api.callsWith(accessToken, otherId).catch(() => ({ calls: [] }));
         if (!active) return;
         const mapped = (res.messages || []).map((m, idx) => ({
           id: m._id || idx,
@@ -262,7 +317,18 @@ export default function ConversationPage({ params }) {
           ts: new Date(m.createdAt).getTime(),
           status: String(m.sender) === String(user?.id) ? 'sent' : undefined,
         }));
-        setMessages(mapped);
+        const callMapped = (callsRes.calls || []).map((c) => ({
+          id: c._id,
+          type: 'call',
+          ts: new Date(c.startedAt || c.createdAt || c.updatedAt || Date.now()).getTime(),
+          direction: String(c.caller) === String(user?.id) ? 'outgoing' : 'incoming',
+          isVideo: c.type === 'video',
+          outcome: c.status === 'answered' || c.status === 'ended' ? 'ended' : c.status, // normalize
+          durationSec: Number(c.duration || 0),
+        }));
+        const mergedRaw = [...mapped, ...callMapped].sort((a, b) => a.ts - b.ts);
+        const merged = coalesceCallItems(mergedRaw);
+        setMessages(merged);
       } catch {}
     })();
     return () => { active = false; };
@@ -290,6 +356,8 @@ export default function ConversationPage({ params }) {
           offer,
           isVideo: !!isVideo
         });
+        // prime call meta for potential missed call
+        callMetaRef.current = { direction: 'incoming', isVideo: !!isVideo, startedAt: Date.now(), connected: false, logged: false };
       }
     };
     
@@ -311,7 +379,43 @@ export default function ConversationPage({ params }) {
             remoteAudioRef.current.srcObject = cm.remoteStream;
             remoteAudioRef.current.play().catch(console.error);
           }
-          if (status === 'ended' || status === 'declined') {
+          // update call record meta
+          if (status === 'calling') {
+            callMetaRef.current = { direction: 'outgoing', isVideo: !!(cm.currentCall?.isVideo), startedAt: Date.now(), connected: false, logged: false };
+          } else if (status === 'connected') {
+            // mark connected so we can compute duration later
+            callMetaRef.current = { ...callMetaRef.current, connected: true, startedAt: callMetaRef.current.startedAt || Date.now() };
+          } else if (status === 'ended' || status === 'declined') {
+            // create a call log entry message
+            const meta = callMetaRef.current || {};
+            const durationSec = meta.connected && meta.startedAt ? Math.max(0, Math.round((Date.now() - meta.startedAt) / 1000)) : 0;
+            const outcome = status === 'ended' ? 'ended' : 'declined';
+            const direction = meta.direction || (prev?.type === 'incoming' ? 'incoming' : 'outgoing');
+            const isVideo = meta.isVideo || !!prev?.isVideo;
+            const ts = Date.now();
+            if (!meta.logged) {
+              setMessages((prevMsgs) => coalesceCallItems([
+                ...prevMsgs,
+                { id: `call-${ts}`, type: 'call', ts, direction, isVideo, outcome: meta.connected ? outcome : (direction === 'incoming' && outcome === 'ended' ? 'ended' : outcome), durationSec }
+              ]));
+            }
+            // persist to backend
+            try {
+              // Throttle persistence to avoid duplicate server records from multiple state transitions
+              const now = Date.now();
+              if (now - lastPersistRef.current < 3000) throw new Error('throttled');
+              const payload = {
+                recipient: direction === 'outgoing' ? otherId : user?.id,
+                type: isVideo ? 'video' : 'voice',
+                status: meta.connected ? (status === 'ended' ? 'ended' : 'declined') : (status === 'declined' ? 'declined' : 'missed'),
+                duration: durationSec,
+                startedAt: meta.startedAt || ts,
+                endedAt: status === 'ended' ? ts : undefined,
+              };
+              api.createCall(accessToken, payload).catch(() => {});
+              lastPersistRef.current = now;
+            } catch {}
+            callMetaRef.current = { direction: null, isVideo: false, startedAt: null, connected: false, logged: true };
             return null;
           }
           return newState;
@@ -490,18 +594,22 @@ export default function ConversationPage({ params }) {
     // Group by day for divider
     const fmt = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" });
     const out = [];
+    let k = 0; // monotonic key counter to guarantee uniqueness
     let lastDay = "";
     for (let i = 0; i < messages.length; i++) {
       const m = messages[i];
       const day = fmt.format(m.ts);
       if (day !== lastDay) {
-        out.push({ type: "divider", key: `d-${day}-${m.id || out.length}`, label: day });
+        out.push({ type: "divider", key: `gk-${k++}`, label: day });
         lastDay = day;
       }
-      // Determine if next message is from same sender
-      const next = messages[i + 1];
-      const isLastInGroup = !next || next.mine !== m.mine;
-      out.push({ type: "message", key: `m-${m.id}`, m: { ...m, isLastInGroup } });
+      if (m.type === 'call') {
+        out.push({ type: 'call', key: `gk-${k++}`, m });
+      } else {
+        const next = messages[i + 1];
+        const isLastInGroup = !next || next.mine !== m.mine;
+        out.push({ type: "message", key: `gk-${k++}`, m: { ...m, isLastInGroup } });
+      }
     }
     return out;
   }, [messages]);
@@ -523,53 +631,65 @@ export default function ConversationPage({ params }) {
       {/* Messages list */}
       <ScrollArea ref={viewportRef} className="flex-1 px-4 py-2">
         <div className="space-y-1 pb-4">
-          <AnimatePresence initial={false}>
-            {groups.map((g, idx) => {
-              if (g.type === "divider") return <DayDivider key={g.key} label={g.label} />;
-              const prev = groups[idx - 1];
-              const compact = prev && prev.type === "message" && prev.m.mine === g.m.mine;
+          {groups.filter(g => g && g.type).map((g, idx) => {
+            const uniqueKey = `item-${idx}-${g.type}-${g.m?.ts || Date.now()}`;
+            if (g.type === "divider") return <DayDivider key={uniqueKey} label={g.label} />;
+            if (g.type === 'call') {
               return (
-                <motion.div
-                  key={g.key}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.18 }}
-                  layout
-                >
-                  <Message
-                    mine={g.m.mine}
-                    text={g.m.text}
-                    time={g.m.isLastInGroup ? new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(g.m.ts) : ""}
-                    compact={compact}
-                    tail={g.m.isLastInGroup}
-                    status={g.m.status}
+                <motion.div key={uniqueKey} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
+                  <CallEntry
+                    direction={g.m.direction}
+                    isVideo={g.m.isVideo}
+                    outcome={g.m.outcome}
+                    durationSec={g.m.durationSec || 0}
+                    time={new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(g.m.ts)}
                   />
                 </motion.div>
               );
-            })}
-            <AnimatePresence>
-              {typing && atBottom && (
-                <motion.div
-                  key="typing"
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 4 }}
-                  transition={{ duration: 0.15 }}
-                  className="w-full flex justify-start"
-                >
-                  <div className="bg-white/80 backdrop-blur-sm rounded-2xl px-3 py-2 shadow-sm inline-flex items-center gap-2 border">
-                    <span className="inline-flex gap-1">
-                      <span className="size-1.5 bg-muted-foreground/70 rounded-full animate-bounce [animation-delay:-0.2s]"></span>
-                      <span className="size-1.5 bg-muted-foreground/70 rounded-full animate-bounce [animation-delay:-0.1s]"></span>
-                      <span className="size-1.5 bg-muted-foreground/70 rounded-full animate-bounce"></span>
-                    </span>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <div ref={bottomRef} />
+            }
+            const prev = groups[idx - 1];
+            const compact = prev && prev.type === "message" && prev.m.mine === g.m.mine;
+            return (
+              <motion.div
+                key={uniqueKey}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+                layout
+              >
+                <Message
+                  mine={g.m.mine}
+                  text={g.m.text}
+                  time={g.m.isLastInGroup ? new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(g.m.ts) : ""}
+                  compact={compact}
+                  tail={g.m.isLastInGroup}
+                  status={g.m.status}
+                />
+              </motion.div>
+            );
+          })}
+          <AnimatePresence>
+            {typing && atBottom && (
+              <motion.div
+                key="typing"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.15 }}
+                className="w-full flex justify-start"
+              >
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl px-3 py-2 shadow-sm inline-flex items-center gap-2 border">
+                  <span className="inline-flex gap-1">
+                    <span className="size-1.5 bg-muted-foreground/70 rounded-full animate-bounce [animation-delay:-0.2s]"></span>
+                    <span className="size-1.5 bg-muted-foreground/70 rounded-full animate-bounce [animation-delay:-0.1s]"></span>
+                    <span className="size-1.5 bg-muted-foreground/70 rounded-full animate-bounce"></span>
+                  </span>
+                </div>
+              </motion.div>
+            )}
           </AnimatePresence>
+          <div ref={bottomRef} />
         </div>
       </ScrollArea>
 
@@ -666,20 +786,23 @@ export default function ConversationPage({ params }) {
         </motion.div>
       )}
 
-      {/* Call Modal */}
-      <CallModal
-        isOpen={!!callState}
-        type={callState?.type}
-        callerName={callState?.callerName}
-        status={callState?.status}
-        isVideo={callState?.isVideo}
-        onAnswer={() => callManager?.answerCall(callState?.offer)}
-        onDecline={() => callManager?.declineCall()}
-        onEndCall={() => callManager?.endCall()}
-        onToggleMute={() => callManager?.toggleMute()}
-      />
+      {/* Call UI */}
+      {callState && (
+        <CallModal
+          isOpen={true}
+          type={callState.type}
+          callerName={title}
+          status={callState.status}
+          onAnswer={() => callManager?.answerCall(callState.offer)}
+          onDecline={() => callManager?.declineCall()}
+          onEndCall={() => callManager?.endCall()}
+          onToggleMute={() => callManager?.toggleMute()}
+          isVideo={!!callState.isVideo}
+          localStream={callManager?.localStream || null}
+          remoteStream={callManager?.remoteStream || null}
+        />
+      )}
 
-      {/* Hidden audio element for remote stream */}
       <audio ref={remoteAudioRef} autoPlay playsInline />
     </div>
   );
