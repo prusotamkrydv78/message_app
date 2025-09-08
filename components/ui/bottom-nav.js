@@ -1,20 +1,67 @@
 "use client";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
+import { MessageCircle, Plus, User, Users } from "lucide-react";
 
 export default function BottomNav() {
+  const pathname = usePathname();
+
+  const isActive = (path) => {
+    if (path === "/chat" && (pathname === "/chat" || pathname.startsWith("/chat/"))) {
+      return true;
+    }
+    return pathname === path;
+  };
+
   return (
-    <nav className="sticky bottom-0 z-10 bg-white/95 backdrop-blur border-t">
-      <div className="h-16 px-6 flex items-center justify-between">
-        <Link href="/chat" className="size-10 grid place-items-center rounded-full hover:bg-gray-100" aria-label="Home">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>
+    <motion.nav
+      initial={{ y: 100 }}
+      animate={{ y: 0 }}
+      className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-border/10 shadow-lg sm:hidden"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    >
+      <div className="flex items-center justify-around px-4 py-2">
+        <Link 
+          href="/chat" 
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
+            isActive("/chat") ? "text-primary" : "text-muted-foreground"
+          }`}
+        >
+          <MessageCircle className="w-5 h-5" />
+          <span className="text-xs font-medium">Chats</span>
         </Link>
-        <Link href="/chat/new" className="px-5 h-10 rounded-full bg-black text-white grid place-items-center text-[14px] font-medium shadow" aria-label="New Chat">
-          + New Chat
+
+        <Link 
+          href="/groups" 
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
+            isActive("/groups") ? "text-primary" : "text-muted-foreground"
+          }`}
+        >
+          <Users className="w-5 h-5" />
+          <span className="text-xs font-medium">Groups</span>
         </Link>
-        <Link href="/profile" className="size-10 grid place-items-center rounded-full hover:bg-gray-100" aria-label="Profile">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="size-5"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M16 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+
+        <Link 
+          href="/chat/new" 
+          className="flex flex-col items-center gap-1 p-2"
+        >
+          <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center shadow-lg">
+            <Plus className="w-5 h-5 text-primary-foreground" />
+          </div>
+          <span className="text-xs font-medium text-primary">New</span>
+        </Link>
+
+        <Link 
+          href="/profile" 
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
+            isActive("/profile") ? "text-primary" : "text-muted-foreground"
+          }`}
+        >
+          <User className="w-5 h-5" />
+          <span className="text-xs font-medium">Profile</span>
         </Link>
       </div>
-    </nav>
+    </motion.nav>
   );
 }

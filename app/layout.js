@@ -21,15 +21,13 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#efefef] text-foreground`}> 
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}> 
         {/* Providers wraps the app with Auth context */}
         <Providers>
-          {/* Clean centered container (phone-sized) */}
-          <div className="h-screen w-full flex items-center justify-center ">
-            <main className="w-full max-w-sm bg-white rounded-[24px] shadow-xl overflow-hidden flex flex-col h-screen">
-              {children}
-            </main>
-          </div>
+          {/* Responsive app shell: full-bleed on mobile, constrained on large screens */}
+          <main className="min-h-[100dvh] flex flex-col">
+            {children}
+          </main>
           {/* Global notifications (new messages etc.) */}
           <NotificationsProvider />
         </Providers>

@@ -3,13 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./button";
 import { Avatar, AvatarFallback } from "./avatar";
+import { Phone, PhoneMissed, PhoneOff } from "lucide-react";
 
 // Inline icons to avoid external icon package initialization issues in production bundles
 const IconPhone = ({ className = "w-4 h-4" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.86 19.86 0 0 1 3.09 5.18 2 2 0 0 1 5.11 3h3a2 2 0 0 1 2 1.72c.12.81.31 1.6.57 2.34a2 2 0 0 1-.45 2.11L9 10a16 16 0 0 0 5 5l.83-1.24a2 2 0 0 1 2.11-.45c.74.26 1.53.45 2.34.57A2 2 0 0 1 22 16.92z"/></svg>
+  <Phone className={className} />
 );
 const IconPhoneOff = ({ className = "w-4 h-4" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.66 13.66a12 12 0 0 1-1.32-1.32m-2.76-4.02A16 16 0 0 1 3.09 5.18 2 2 0 0 1 5.11 3h3a2 2 0 0 1 2 1.72c.12.81.31 1.6.57 2.34a2 2 0 0 1-.45 2.11L9 10m6 6 1.24-.83a2 2 0 0 1 2.11-.45c.74.26 1.53.45 2.34.57A2 2 0 0 0 22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-7.95-3.54M1 1l22 22"/></svg>
+  <PhoneOff className={className} />
 );
 const IconMic = ({ className = "w-6 h-6" }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1v11a3 3 0 0 1-6 0"/><path d="M19 8a7 7 0 0 1-14 0"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
@@ -125,12 +126,12 @@ export default function CallModal({
           {isVideo ? (
             <div className="relative bg-black h-full sm:h-auto">
               {/* Remote video */}
-              <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-[calc(100vh-180px)] sm:h-[420px] object-cover bg-black" />
+              <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-[calc(100vh-200px)] sm:h-[420px] object-cover bg-black" />
               {/* Local video pip */}
-              <video ref={localVideoRef} autoPlay muted playsInline className="absolute bottom-24 right-4 sm:bottom-4 w-28 h-18 sm:w-40 sm:h-24 object-cover rounded-lg shadow-lg border border-white/20 bg-black" />
+              <video ref={localVideoRef} autoPlay muted playsInline className="absolute bottom-24 right-4 sm:bottom-4 w-28 h-20 sm:w-40 sm:h-24 object-cover rounded-lg shadow-lg border border-white/20 bg-black" />
 
               {/* Bottom panel for mobile */}
-              <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t sm:static sm:bg-transparent">
+              <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t sm:static sm:bg-transparent" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.5rem)' }}>
                 {/* Name + status */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -190,7 +191,7 @@ export default function CallModal({
                 className="mb-6"
               >
                 <Avatar className="w-24 h-24 mx-auto border-4 border-white shadow-lg">
-                  <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-2xl font-bold">
+                  <AvatarFallback className="bg-gradient-to-r from-orange-500 to-red-600 text-white text-2xl font-bold">
                     {getInitials(callerName)}
                   </AvatarFallback>
                 </Avatar>
