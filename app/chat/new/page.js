@@ -31,14 +31,14 @@ export default function NewChatPage() {
       return;
     }
     setIsValidating(true);
-    try {``
+    try {
       const res = await api.validatePhone(accessToken, countryCode, digitsOnly);
       if (!res.isRegistered) {
         setFoundUser(null);
         toast({ title: "User not found", description: "This phone number is not registered.", variant: "destructive" });
         return;
       }
-      if (res.user.id === user?.id) {
+      if (String(res.user.id || res.user._id) === String(user?.id || user?._id)) {
         setFoundUser(null);
         toast({ title: "Cannot add yourself", variant: "destructive" });
         return;

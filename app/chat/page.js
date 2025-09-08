@@ -133,7 +133,14 @@ export default function ChatPage() {
     }
   };
 
-  const handleAccept = async (conversationId) => {
+  const handleAccept = async (conversation) => {
+    // Accept can be called with id or full conversation object; normalize
+    const conversationId = typeof conversation === 'string' ? conversation : conversation?.id;
+    const ou = typeof conversation === 'string' ? null : conversation?.otherUser;
+    const title = ou?.name || `${ou?.countryCode} ${ou?.phoneNumber}`;
+    const phone = `${ou?.countryCode || ''} ${ou?.phoneNumber || ''}`.trim();
+    const otherId = ou?.id || ou?._id || '';
+
     setLoadingStates(prev => ({ ...prev, [conversationId]: true }));
     try {
       await api.acceptConversation(accessToken, conversationId);
@@ -144,8 +151,8 @@ export default function ChatPage() {
       // Refresh conversations to update the UI
       const res = await api.conversations(accessToken);
       setConversations(res.conversations || []);
-      // Redirect to individual chat page
-      router.push(`/chat/${conversationId}`);
+      // Redirect to individual chat page with required params for [id]/page.js
+      router.push(`/chat/${encodeURIComponent(conversationId)}?otherId=${encodeURIComponent(otherId)}&name=${encodeURIComponent(title)}&phone=${encodeURIComponent(phone)}`);
     } catch (error) {
       console.error('Error accepting conversation:', error);
       toast({
@@ -440,11 +447,11 @@ export default function ChatPage() {
                                       <div className="flex gap-2">
                                         <Button
                                           size="sm"
-                                          onClick={() => handleAcceptRequest(c.id)}
-                                          disabled={acceptingRequest === c.id}
+                                          onClick={() => handleAccept(c)}
+                                          disabled={!!loadingStates[c.id]}
                                           className="bg-green-600 hover:bg-green-700 text-white h-8 px-3"
                                         >
-                                          {acceptingRequest === c.id ? (
+                                          {loadingStates[c.id] ? (
                                             <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" />
                                           ) : (
                                             <Check className="w-3 h-3 mr-1" />
@@ -455,10 +462,10 @@ export default function ChatPage() {
                                           size="sm"
                                           variant="outline"
                                           onClick={() => handleDeclineRequest(c.id)}
-                                          disabled={decliningRequest === c.id}
+                                          disabled={!!loadingStates[c.id]}
                                           className="border-red-200 text-red-600 hover:bg-red-50 h-8 px-3"
                                         >
-                                          {decliningRequest === c.id ? (
+                                          {loadingStates[c.id] ? (
                                             <div className="w-3 h-3 border-2 border-red-600 border-t-transparent rounded-full animate-spin mr-1" />
                                           ) : (
                                             <X className="w-3 h-3 mr-1" />
@@ -474,10 +481,10 @@ export default function ChatPage() {
                                           size="sm"
                                           variant="outline"
                                           onClick={() => handleDeclineRequest(c.id)}
-                                          disabled={decliningRequest === c.id}
+                                          disabled={!!loadingStates[c.id]}
                                           className="border-red-200 text-red-600 hover:bg-red-50 h-8 px-3"
                                         >
-                                          {decliningRequest === c.id ? (
+                                          {loadingStates[c.id] ? (
                                             <div className="w-3 h-3 border-2 border-red-600 border-t-transparent rounded-full animate-spin mr-1" />
                                           ) : (
                                             <X className="w-3 h-3 mr-1" />
