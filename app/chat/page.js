@@ -12,6 +12,7 @@ import { ScrollArea } from "../../components/ui/scroll-area";
 import { Card, CardContent } from "../../components/ui/card";
 import { Avatar, AvatarFallback } from "../../components/ui/avatar";
 import { Input } from "../../components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../../components/ui/dialog";
 import BottomNav from "../../components/ui/bottom-nav";
 
 const formatTime = (dateString) => {
@@ -43,6 +44,8 @@ export default function ChatPage() {
   const [deletingConversation, setDeletingConversation] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
   const [loadingStates, setLoadingStates] = useState({});
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -265,7 +268,7 @@ export default function ChatPage() {
                   href={`/chat/${conv.otherUser?.id || conv.otherId}?name=${encodeURIComponent(conv.otherUser?.name || conv.name || 'User')}&phone=${encodeURIComponent(conv.otherUser?.phoneNumber || conv.phoneNumber || '')}&otherId=${conv.otherUser?.id || conv.otherId}`}
                   className="block"
                 >
-                  <Card className="p-3 sm:p-4 hover:shadow-md transition-all duration-200 cursor-pointer border-0 bg-white/80 backdrop-blur-sm hover:bg-white/90 active:scale-[0.98] sm:active:scale-100">
+                  <Card className="relative p-3 sm:p-4 hover:shadow-md transition-all duration-200 cursor-pointer border-0 bg-white/80 backdrop-blur-sm hover:bg-white/90 active:scale-[0.98] sm:active:scale-100">
                     <div className="flex items-center gap-3">
                       <Avatar className="w-11 h-11 sm:w-12 sm:h-12">
                         <AvatarFallback className="bg-gradient-to-r from-orange-500 to-red-600 text-white font-medium text-sm">
@@ -277,15 +280,45 @@ export default function ChatPage() {
                           <h3 className="font-semibold text-sm sm:text-base text-foreground truncate">
                             {conv.otherUser?.name || conv.name || `${conv.otherUser?.countryCode || ''} ${conv.otherUser?.phoneNumber || ''}`.trim() || 'User'}
                           </h3>
-                          <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                            {conv.lastMessage?.createdAt ? formatTime(conv.lastMessage.createdAt) : ''}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                              {conv.lastMessage?.createdAt ? formatTime(conv.lastMessage.createdAt) : ''}
+                            </span>
+                            <button
+                              className="p-1 rounded hover:bg-muted"
+                              aria-label="Open menu"
+                              onClick={(e) => toggleMenu(conv.id, e)}
+                            >
+                              <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                          </div>
                         </div>
                         <p className="text-xs sm:text-sm text-muted-foreground truncate">
                           {conv.lastMessage?.text || 'No messages yet'}
                         </p>
                       </div>
                     </div>
+
+                    {openMenuId === conv.id && (
+                      <div
+                        className="absolute right-3 top-10 z-10 w-40 bg-white border rounded-md shadow-lg"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      >
+                        <button
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 disabled:opacity-60"
+                          disabled={deletingConversation === conv.id}
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setOpenMenuId(null);
+                            setConfirmDeleteId(conv.id);
+                            setConfirmOpen(true);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" /> Delete
+                        </button>
+                      </div>
+                    )}
                   </Card>
                 </Link>
               </motion.div>
@@ -316,6 +349,38 @@ export default function ChatPage() {
       
         {/* Bottom Navigation for Mobile */}
         <BottomNav />
+        
+        {/* Delete confirmation dialog */}
+        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete conversation?</DialogTitle>
+              <DialogDescription>
+                This will permanently remove this conversation from your chat list. This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                onClick={async () => {
+                  if (!confirmDeleteId) { setConfirmOpen(false); return; }
+                  try {
+                    await handleDeleteConversation(confirmDeleteId);
+                    toast({ title: 'Conversation deleted' });
+                  } catch (err) {
+                    toast({ title: 'Failed to delete', description: err?.message || 'Please try again.', variant: 'destructive' });
+                  } finally {
+                    setConfirmOpen(false);
+                    setConfirmDeleteId(null);
+                  }
+                }}
+              >
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

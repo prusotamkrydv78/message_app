@@ -16,6 +16,7 @@ import { CallManager } from "../../../lib/webrtc";
 import CallModal from "../../../components/ui/call-modal";
 import BottomNav from "../../../components/ui/bottom-nav";
 import TypingIndicator from "../../../components/ui/typing-indicator";
+import { useToast } from "../../../components/ui/use-toast";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
@@ -102,7 +103,7 @@ function CallEntry({ direction, isVideo, outcome, durationSec, time }) {
   );
 }
 
-function Header({ title, phone, elevated, callManager, callState, otherId, isOnline }) {
+function Header({ title, phone, elevated, callManager, callState, otherId, isOnline, onDelete, deleting }) {
   const getInitials = (name) => {
     if (!name) return "?";
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
@@ -163,7 +164,15 @@ function Header({ title, phone, elevated, callManager, callState, otherId, isOnl
             <Video className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
           
-          <Button variant="ghost" size="sm" className="h-9 w-9 sm:h-10 sm:w-10 p-0 hidden sm:flex">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 sm:h-10 sm:w-10 p-0 hidden sm:flex"
+            onClick={onDelete}
+            disabled={!!deleting}
+            aria-label="Delete chat"
+            title={deleting ? 'Deleting…' : 'Delete chat'}
+          >
             <MoreVertical className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
         </div>
@@ -255,6 +264,7 @@ export default function ConversationPage({ params }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading, accessToken } = useAuth();
+  const { toast } = useToast();
 
   const resolvedParams = use(params);
   const title = searchParams.get("name") || "User";
@@ -281,6 +291,8 @@ export default function ConversationPage({ params }) {
   const typingEmitRef = useRef(null);
   const callMetaRef = useRef({ direction: null, isVideo: false, startedAt: null, connected: false, logged: false });
   const lastPersistRef = useRef(0);
+  const [conversationId, setConversationId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -314,6 +326,7 @@ export default function ConversationPage({ params }) {
       if (!accessToken || !otherId) return;
       try {
         const res = await api.messagesWith(accessToken, otherId);
+        setConversationId(res.conversationId || null);
         const callsRes = await api.callsWith(accessToken, otherId).catch(() => ({ calls: [] }));
         if (!active) return;
         const mapped = (res.messages || []).map((m, idx) => ({
@@ -339,6 +352,25 @@ export default function ConversationPage({ params }) {
     })();
     return () => { active = false; };
   }, [accessToken, otherId, user?.id]);
+
+  const handleDeleteChat = async () => {
+    if (!accessToken || !conversationId) {
+      toast({ title: 'Cannot delete', description: 'Conversation not found.', variant: 'destructive' });
+      return;
+    }
+    const ok = typeof window !== 'undefined' ? window.confirm('Delete this conversation? This cannot be undone.') : true;
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await api.deleteConversation(accessToken, conversationId);
+      toast({ title: 'Conversation deleted' });
+      router.replace('/chat');
+    } catch (e) {
+      toast({ title: 'Failed to delete', description: e.message || 'Please try again.', variant: 'destructive' });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // Initialize call manager
   useEffect(() => {
@@ -513,6 +545,21 @@ export default function ConversationPage({ params }) {
         }
       });
 
+      // Handle server-side message send errors
+      s.on('error_message', ({ message, clientId } = {}) => {
+        setMessages((prev) => {
+          if (clientId) return prev.filter(m => m.clientId !== clientId);
+          return prev.filter(m => m.status !== 'sending');
+        });
+        try {
+          toast({
+            title: 'Message not sent',
+            description: message || 'Unable to deliver your message.',
+            variant: 'destructive',
+          });
+        } catch {}
+      });
+
       s.on('messages_seen', ({ by, ids = [] }) => {
         if (String(by) !== String(otherId)) return;
         setMessages((prev) => prev.map(m => (ids.includes(m.id) ? { ...m, status: 'seen' } : m)));
@@ -543,6 +590,7 @@ export default function ConversationPage({ params }) {
           s.off("receive_message");
           s.off("typing");
           s.off('messages_seen');
+          s.off('error_message');
           s.off('presence_update', onPresence);
         }
         if (typingClearRef.current) {
@@ -660,6 +708,8 @@ export default function ConversationPage({ params }) {
           callState={callState?.status || 'idle'}
           otherId={otherId}
           isOnline={isOnline}
+          onDelete={handleDeleteChat}
+          deleting={deleting}
         />
 
         {/* Messages list */}
