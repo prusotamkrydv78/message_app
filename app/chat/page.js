@@ -46,6 +46,7 @@ export default function ChatPage() {
   const [loadingStates, setLoadingStates] = useState({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [requestsOpen, setRequestsOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -204,10 +205,12 @@ export default function ChatPage() {
     }
   };
 
-  const filteredConversations = conversations.filter(c => {
-    const title = c.otherUser?.name || `${c.otherUser?.countryCode} ${c.otherUser?.phoneNumber}`;
-    return title.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const filteredConversations = conversations
+    .filter(c => !c.isPending) // exclude pending requests from main list
+    .filter(c => {
+      const title = c.otherUser?.name || `${c.otherUser?.countryCode} ${c.otherUser?.phoneNumber}`;
+      return title.toLowerCase().includes(searchQuery.toLowerCase());
+    });
 
   if (loading) {
     return (
@@ -238,6 +241,9 @@ export default function ChatPage() {
         <div className="h-16 px-3 sm:px-4 flex items-center justify-between">
           <h1 className="text-lg sm:text-xl font-semibold text-foreground">Messages</h1>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="h-9 w-9 sm:h-10 sm:w-10 p-0" onClick={() => setRequestsOpen(true)} title="Requests">
+              <Users className="h-4 w-4 sm:h-5 sm:w-5" />
+            </Button>
             <Link href="/profile" className="hidden sm:block">
               <Button variant="ghost" size="sm" className="h-9 w-9 sm:h-10 sm:w-10 p-0">
                 <User className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -255,8 +261,59 @@ export default function ChatPage() {
 
       <ScrollArea className="flex-1">
         <div className="p-3 sm:p-4 space-y-2 sm:space-y-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
+          {/* Requests section */}
+          {conversations.some(c => c.isPending) && (
+            <div className="mb-2 sm:mb-3">
+              <h2 className="px-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Requests</h2>
+              <div className="space-y-2">
+                {conversations.filter(c => c.isPending).slice(0, 2).map((req) => {
+                  const title = req.otherUser?.name || `${req.otherUser?.countryCode || ''} ${req.otherUser?.phoneNumber || ''}`.trim();
+                  const isIncoming = !req.isRequestedByMe;
+                  return (
+                    <Card key={`req-${req.id}`} className="p-3 bg-white/90 border">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Avatar className="w-9 h-9">
+                            <AvatarFallback className="bg-gradient-to-r from-orange-500 to-red-600 text-white text-xs font-medium">
+                              {getInitials(title || 'U')}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <div className="font-medium text-sm truncate">{title || 'Unknown'}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {isIncoming ? 'Incoming request' : 'Waiting for acceptance'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isIncoming ? (
+                            <>
+                              <Button size="sm" variant="secondary" disabled={!!loadingStates[req.id]} onClick={() => handleDeclineRequest(req.id)}>Decline</Button>
+                              <Button size="sm" className="bg-gradient-to-r from-orange-500 to-red-600 text-white" disabled={!!loadingStates[req.id]} onClick={() => handleAccept(req)}>
+                                {loadingStates[req.id] ? '...' : 'Accept'}
+                              </Button>
+                            </>
+                          ) : (
+                            <Button size="sm" variant="secondary" disabled={!!loadingStates[req.id]} onClick={() => handleDeclineRequest(req.id)}>Cancel</Button>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+                {conversations.filter(c => c.isPending).length > 2 && (
+                  <div className="pt-1">
+                    <Link href="/requests">
+                      <Button variant="ghost" className="text-sm px-2">See all requests</Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <AnimatePresence>
-            {conversations.map((conv, index) => (
+            {filteredConversations.map((conv, index) => (
               <motion.div
                 key={conv.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -378,6 +435,81 @@ export default function ChatPage() {
               >
                 Delete
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Requests dialog */}
+        <Dialog open={requestsOpen} onOpenChange={setRequestsOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Requests</DialogTitle>
+              <DialogDescription>Manage your incoming and sent requests.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {/* Incoming */}
+              <div>
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Incoming</div>
+                <div className="space-y-2">
+                  {conversations.filter(c => c.isPending && !c.isRequestedByMe).map((req) => {
+                    const title = req.otherUser?.name || `${req.otherUser?.countryCode || ''} ${req.otherUser?.phoneNumber || ''}`.trim();
+                    return (
+                      <Card key={`reqdlg-in-${req.id}`} className="p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <Avatar className="w-8 h-8"><AvatarFallback>{getInitials(title || 'U')}</AvatarFallback></Avatar>
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium truncate">{title || 'Unknown'}</div>
+                              <div className="text-xs text-muted-foreground">Incoming request</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button size="sm" variant="secondary" disabled={!!loadingStates[req.id]} onClick={() => handleDeclineRequest(req.id)}>Decline</Button>
+                            <Button size="sm" className="bg-gradient-to-r from-orange-500 to-red-600 text-white" disabled={!!loadingStates[req.id]} onClick={() => handleAccept(req)}>
+                              {loadingStates[req.id] ? '...' : 'Accept'}
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                  {conversations.filter(c => c.isPending && !c.isRequestedByMe).length === 0 && (
+                    <div className="text-xs text-muted-foreground">No incoming requests</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Sent */}
+              <div>
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Sent</div>
+                <div className="space-y-2">
+                  {conversations.filter(c => c.isPending && c.isRequestedByMe).map((req) => {
+                    const title = req.otherUser?.name || `${req.otherUser?.countryCode || ''} ${req.otherUser?.phoneNumber || ''}`.trim();
+                    return (
+                      <Card key={`reqdlg-out-${req.id}`} className="p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <Avatar className="w-8 h-8"><AvatarFallback>{getInitials(title || 'U')}</AvatarFallback></Avatar>
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium truncate">{title || 'Unknown'}</div>
+                              <div className="text-xs text-muted-foreground">Waiting for acceptance</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button size="sm" variant="secondary" disabled={!!loadingStates[req.id]} onClick={() => handleDeclineRequest(req.id)}>Cancel</Button>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                  {conversations.filter(c => c.isPending && c.isRequestedByMe).length === 0 && (
+                    <div className="text-xs text-muted-foreground">No sent requests</div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setRequestsOpen(false)}>Close</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

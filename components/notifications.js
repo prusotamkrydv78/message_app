@@ -101,7 +101,56 @@ export default function NotificationsProvider() {
       }
     };
     s.on("receive_message", handler);
-    return () => { s.off && s.off("receive_message", handler); };
+
+    // Incoming connection request
+    const onRequest = (payload) => {
+      // payload: { id, requestedBy, otherUser, createdAt }
+      // Only show if I am the recipient (not the requester)
+      if (!payload || String(payload.requestedBy) === String(user.id)) return;
+      const title = payload.otherUser?.name || `${payload.otherUser?.countryCode || ''} ${payload.otherUser?.phoneNumber || ''}`.trim() || 'New request';
+      const toastId = `req-${payload.id}-${Date.now()}`;
+      setToasts((prev) => [
+        ...prev,
+        {
+          id: toastId,
+          type: 'request',
+          conversationId: payload.id,
+          requester: payload.otherUser || null,
+          title,
+        },
+      ]);
+      // auto-dismiss after 12s if not interacted
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== toastId));
+      }, 12000);
+    };
+    s.on('conversation_request', onRequest);
+
+    // Request accepted notification (for requester)
+    const onAccepted = (payload) => {
+      // payload: { id, acceptedAt, otherUser }
+      const toastId = `acc-${payload.id}-${Date.now()}`;
+      setToasts((prev) => [
+        ...prev,
+        {
+          id: toastId,
+          type: 'accepted',
+          conversationId: payload.id,
+          otherUser: payload.otherUser || null,
+          text: 'Your connection request was accepted',
+        },
+      ]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== toastId));
+      }, 5000);
+    };
+    s.on('conversation_accepted', onAccepted);
+
+    return () => {
+      s.off && s.off("receive_message", handler);
+      s.off && s.off('conversation_request', onRequest);
+      s.off && s.off('conversation_accepted', onAccepted);
+    };
   }, [accessToken, user, pathname]);
 
   // Reset badge when user focuses app or navigates into a chat
@@ -128,26 +177,88 @@ export default function NotificationsProvider() {
 
   return (
     <div className="pointer-events-none fixed inset-0 z-50 flex flex-col items-center gap-2 p-3">
-      {toasts.map((t) => (
-        <button
-          key={t.id}
-          onClick={async () => {
-            try {
-              // ensure conversation exists then navigate
-              const res = await api.startConversation(accessToken, t.otherId);
-              const convoId = res?.id;
-              if (convoId) router.push(`/chat/${convoId}?otherId=${encodeURIComponent(t.otherId)}`);
-              else router.push(`/chat`);
-            } catch {
-              router.push(`/chat`);
-            }
-          }}
-          className="pointer-events-auto w-full max-w-sm bg-black text-white rounded-xl px-4 py-3 shadow-lg text-left active:scale-[0.99]"
-        >
-          <div className="text-[13px] opacity-80">New message</div>
-          <div className="font-medium text-[14px] truncate">{t.text}</div>
-        </button>
-      ))}
+      {/* Requests list panel */}
+      {toasts.some(t => t.type === 'request') && (
+        <div className="pointer-events-auto w-full max-w-sm bg-white text-foreground border rounded-xl px-4 py-3 shadow-lg text-left self-end mr-0 sm:mr-2" style={{ marginTop: '4px' }}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-semibold">Requests</div>
+            <a href="/requests" className="text-xs text-primary hover:underline">View all</a>
+          </div>
+          <div className="space-y-2 max-h-72 overflow-auto pr-1">
+            {toasts.filter(t => t.type === 'request').map((t) => (
+              <div key={t.id} className="border rounded-lg px-3 py-2">
+                <div className="text-[13px] text-muted-foreground">Connection request</div>
+                <div className="font-medium text-[14px] truncate mb-2">{t.title}</div>
+                <div className="flex items-center gap-2 justify-end">
+                  <button
+                    onClick={async () => {
+                      try { await api.deleteConversation(accessToken, t.conversationId); } catch {}
+                      setToasts((prev) => prev.filter((x) => x.id !== t.id));
+                    }}
+                    className="px-3 py-1.5 text-sm rounded-md border bg-white hover:bg-muted"
+                  >
+                    Decline
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await api.acceptConversation(accessToken, t.conversationId);
+                        const ou = t.requester || {};
+                        const title = ou.name || `${ou.countryCode || ''} ${ou.phoneNumber || ''}`.trim();
+                        const phone = `${ou.countryCode || ''} ${ou.phoneNumber || ''}`.trim();
+                        router.push(`/chat/${encodeURIComponent(t.conversationId)}?otherId=${encodeURIComponent(ou.id || '')}&name=${encodeURIComponent(title)}&phone=${encodeURIComponent(phone)}`);
+                      } catch {}
+                      setToasts((prev) => prev.filter((x) => x.id !== t.id));
+                    }}
+                    className="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:opacity-90"
+                  >
+                    Accept
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {toasts.map((t) => {
+        if (t.type === 'request') {
+          // Skip individual request cards since we render the grouped list panel above
+          return null;
+        }
+        if (t.type === 'accepted') {
+          return (
+            <div
+              key={t.id}
+              className="pointer-events-auto w-full max-w-sm bg-black text-white rounded-xl px-4 py-3 shadow-lg text-left"
+            >
+              <div className="text-[13px] opacity-80">Request update</div>
+              <div className="font-medium text-[14px] truncate">{t.text}</div>
+            </div>
+          );
+        }
+        // default: message toast
+        return (
+          <button
+            key={t.id}
+            onClick={async () => {
+              try {
+                // ensure conversation exists then navigate
+                const res = await api.startConversation(accessToken, t.otherId);
+                const convoId = res?.id;
+                if (convoId) router.push(`/chat/${convoId}?otherId=${encodeURIComponent(t.otherId)}`);
+                else router.push(`/chat`);
+              } catch {
+                router.push(`/chat`);
+              }
+            }}
+            className="pointer-events-auto w-full max-w-sm bg-black text-white rounded-xl px-4 py-3 shadow-lg text-left active:scale-[0.99]"
+          >
+            <div className="text-[13px] opacity-80">New message</div>
+            <div className="font-medium text-[14px] truncate">{t.text}</div>
+          </button>
+        );
+      })}
     </div>
   );
 }
