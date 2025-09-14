@@ -4,6 +4,7 @@ import { useAuth } from "../lib/auth";
 import { getSocket } from "../lib/socket";
 import { usePathname, useRouter } from "next/navigation";
 import { api } from "../lib/api";
+import { useToast } from "./ui/use-toast";
 
 function canNotify() {
   if (typeof window === "undefined" || !("Notification" in window)) return false;
@@ -45,6 +46,7 @@ export default function NotificationsProvider() {
   const pathname = usePathname();
   const router = useRouter();
   const [toasts, setToasts] = useState([]);
+  const { toast } = useToast();
   const [unread, setUnread] = useState(0);
 
   useEffect(() => { ensurePermission(); }, []);
@@ -59,22 +61,30 @@ export default function NotificationsProvider() {
       // Only notify if I am the RECIPIENT (not when I am the sender and get echo)
       const iAmRecipient = String(msg.recipient) === String(user.id);
       if (!iAmRecipient) return;
+      // Detect if user is anywhere in the chat experience (/chat list or /chat/[id])
+      let isInChatArea = false;
       let isInThisChat = false;
       if (typeof window !== 'undefined') {
-        const inChatRoute = pathname.startsWith('/chat/');
-        const sp = new URLSearchParams(window.location.search);
-        isInThisChat = inChatRoute && sp.get('otherId') === otherId;
+        isInChatArea = pathname.startsWith('/chat');
+        if (pathname.startsWith('/chat/')) {
+          const sp = new URLSearchParams(window.location.search);
+          isInThisChat = sp.get('otherId') === otherId;
+        }
       }
       // Broadcast event so any list pages can refresh
       window.dispatchEvent(new CustomEvent("chat:new-message", { detail: { otherId, msg, isInThisChat } }));
-      // Show notification if not in that chat or tab hidden
-      const shouldNotify = document.visibilityState === "hidden" || !isInThisChat;
+      // Show notification only if app is hidden or user is outside chat routes
+      const shouldNotify = document.visibilityState === "hidden" || !isInChatArea;
       if (shouldNotify) {
         if (canNotify()) {
           try {
             new Notification("New message", { body: msg.text || "New message received" });
           } catch {}
         }
+        // Shadcn toast (in-app)
+        try {
+          toast({ title: "New message", description: msg.text || "You received a new message" });
+        } catch {}
         // Sound
         playDing();
         // Badge count (compute next value within updater to avoid stale value)
@@ -107,22 +117,13 @@ export default function NotificationsProvider() {
       // payload: { id, requestedBy, otherUser, createdAt }
       // Only show if I am the recipient (not the requester)
       if (!payload || String(payload.requestedBy) === String(user.id)) return;
-      const title = payload.otherUser?.name || `${payload.otherUser?.countryCode || ''} ${payload.otherUser?.phoneNumber || ''}`.trim() || 'New request';
-      const toastId = `req-${payload.id}-${Date.now()}`;
-      setToasts((prev) => [
-        ...prev,
-        {
-          id: toastId,
-          type: 'request',
-          conversationId: payload.id,
-          requester: payload.otherUser || null,
-          title,
-        },
-      ]);
-      // auto-dismiss after 12s if not interacted
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== toastId));
-      }, 12000);
+      // No popup UI for requests; we only trigger refresh below
+      // Notify any chat list views to refresh
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('chat:refresh-conversations', { detail: { reason: 'request', conversationId: payload.id } }));
+        }
+      } catch {}
     };
     s.on('conversation_request', onRequest);
 
@@ -140,6 +141,19 @@ export default function NotificationsProvider() {
           text: 'Your connection request was accepted',
         },
       ]);
+      // Ask lists to refresh
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('chat:refresh-conversations', { detail: { reason: 'accepted', conversationId: payload.id } }));
+        }
+      } catch {}
+      // Auto-navigate requester to the chat
+      try {
+        const ou = payload.otherUser || {};
+        const title = ou.name || `${ou.countryCode || ''} ${ou.phoneNumber || ''}`.trim();
+        const phone = `${ou.countryCode || ''} ${ou.phoneNumber || ''}`.trim();
+        router.push(`/chat/${encodeURIComponent(payload.id)}?otherId=${encodeURIComponent(ou.id || '')}&name=${encodeURIComponent(title)}&phone=${encodeURIComponent(phone)}`);
+      } catch {}
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== toastId));
       }, 5000);
@@ -177,55 +191,8 @@ export default function NotificationsProvider() {
 
   return (
     <div className="pointer-events-none fixed inset-0 z-50 flex flex-col items-center gap-2 p-3">
-      {/* Requests list panel */}
-      {toasts.some(t => t.type === 'request') && (
-        <div className="pointer-events-auto w-full max-w-sm bg-white text-foreground border rounded-xl px-4 py-3 shadow-lg text-left self-end mr-0 sm:mr-2" style={{ marginTop: '4px' }}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm font-semibold">Requests</div>
-            <a href="/requests" className="text-xs text-primary hover:underline">View all</a>
-          </div>
-          <div className="space-y-2 max-h-72 overflow-auto pr-1">
-            {toasts.filter(t => t.type === 'request').map((t) => (
-              <div key={t.id} className="border rounded-lg px-3 py-2">
-                <div className="text-[13px] text-muted-foreground">Connection request</div>
-                <div className="font-medium text-[14px] truncate mb-2">{t.title}</div>
-                <div className="flex items-center gap-2 justify-end">
-                  <button
-                    onClick={async () => {
-                      try { await api.deleteConversation(accessToken, t.conversationId); } catch {}
-                      setToasts((prev) => prev.filter((x) => x.id !== t.id));
-                    }}
-                    className="px-3 py-1.5 text-sm rounded-md border bg-white hover:bg-muted"
-                  >
-                    Decline
-                  </button>
-                  <button
-                    onClick={async () => {
-                      try {
-                        await api.acceptConversation(accessToken, t.conversationId);
-                        const ou = t.requester || {};
-                        const title = ou.name || `${ou.countryCode || ''} ${ou.phoneNumber || ''}`.trim();
-                        const phone = `${ou.countryCode || ''} ${ou.phoneNumber || ''}`.trim();
-                        router.push(`/chat/${encodeURIComponent(t.conversationId)}?otherId=${encodeURIComponent(ou.id || '')}&name=${encodeURIComponent(title)}&phone=${encodeURIComponent(phone)}`);
-                      } catch {}
-                      setToasts((prev) => prev.filter((x) => x.id !== t.id));
-                    }}
-                    className="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:opacity-90"
-                  >
-                    Accept
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {toasts.map((t) => {
-        if (t.type === 'request') {
-          // Skip individual request cards since we render the grouped list panel above
-          return null;
-        }
+        if (t.type === 'request') return null; // we don't render request popups anymore
         if (t.type === 'accepted') {
           return (
             <div

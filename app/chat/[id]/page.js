@@ -212,7 +212,7 @@ function Tick({ state }) {
   );
 }
 
-function Message({ mine, text, time, compact, tail, status }) {
+function Message({ mine, text, time, compact, tail, status, onRetry }) {
   const containerGap = compact ? "-mt-1" : "mt-2";
   // detect emoji-only
   const clean = (text || '').trim();
@@ -245,9 +245,19 @@ function Message({ mine, text, time, compact, tail, status }) {
       <div className={`relative ${baseBubble} ${colors} ${shadow} transition-all duration-200 hover:shadow-md`}>
         <div className="whitespace-pre-wrap break-words">{text}</div>
         {!!time && (
-          <div className={`text-xs mt-1.5 flex items-center ${mine ? "text-white/80" : "text-muted-foreground"}`}>
+          <div className={`text-xs mt-1.5 flex items-center gap-2 ${mine ? "text-white/80" : "text-muted-foreground"}`}>
             <span>{time}</span>
             {mine && <Tick state={status} />}
+            {mine && status === 'failed' && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className={`px-2 py-0.5 rounded border ${mine ? 'bg-white/10 text-white/90 border-white/30 hover:bg-white/20' : 'bg-muted text-foreground border-border hover:bg-muted/70'} transition-colors text-[11px]`}
+                title="Retry sending"
+              >
+                Retry
+              </button>
+            )}
           </div>
         )}
         {tail && !compact && (
@@ -269,7 +279,9 @@ export default function ConversationPage({ params }) {
   const resolvedParams = use(params);
   const title = searchParams.get("name") || "User";
   const phone = searchParams.get("phone") || "";
-  const otherId = resolvedParams.id || "";
+  // Prefer the explicit otherId from query string (provided when navigating via accept handlers)
+  // Fallback to route param for links that use /chat/[otherUserId]
+  const otherId = searchParams.get("otherId") || resolvedParams.id || "";
 
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
@@ -291,6 +303,7 @@ export default function ConversationPage({ params }) {
   const typingEmitRef = useRef(null);
   const callMetaRef = useRef({ direction: null, isVideo: false, startedAt: null, connected: false, logged: false });
   const lastPersistRef = useRef(0);
+  const resendLockRef = useRef(false);
   const [conversationId, setConversationId] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -318,6 +331,29 @@ export default function ConversationPage({ params }) {
       mq.removeEventListener ? mq.removeEventListener('change', handler) : mq.removeListener(handler);
     };
   }, []);
+
+  const retryMessage = (m) => {
+    if (!m || !m.mine || m.status !== 'failed' || !socketRef.current || !otherId) return;
+    if (resendLockRef.current) return;
+    resendLockRef.current = true;
+    const newClientId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // Optimistically flip to sending with new clientId/ts
+    setMessages((prev) => prev.map(x => (x.clientId && x.clientId === m.clientId)
+      ? { ...x, clientId: newClientId, status: 'sending', ts: Date.now() }
+      : x
+    ));
+    // Emit stop typing and resend
+    try { socketRef.current.emit('typing', { to: otherId, isTyping: false }); } catch {}
+    try { socketRef.current.emit('send_message', { to: otherId, text: m.text, clientId: newClientId }); } catch (e) {
+      // If immediate error, flip back to failed
+      setMessages((prev) => prev.map(x => (x.clientId && x.clientId === newClientId)
+        ? { ...x, status: 'failed' }
+        : x
+      ));
+    } finally {
+      setTimeout(() => { resendLockRef.current = false; }, 200);
+    }
+  };
 
   // Fetch history
   useEffect(() => {
@@ -498,8 +534,14 @@ export default function ConversationPage({ params }) {
       const { getSocket } = await import("../../../lib/socket");
       s = getSocket(accessToken);
       socketRef.current = s;
-      // request presence for header indicator
-      s.emit('presence_request', { userId: otherId });
+      // Request presence for header indicator once connected
+      const requestPresence = () => {
+        try { s.emit('presence_request', { userId: otherId }); } catch {}
+      };
+      if (s.connected) requestPresence();
+      s.on('connect', requestPresence);
+      // Fallback retry shortly after mount in case connect races
+      setTimeout(requestPresence, 600);
       // Clear unread counter for this conversation as we're viewing it
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('chat:clear-unread', { detail: { otherId } }));
@@ -513,6 +555,13 @@ export default function ConversationPage({ params }) {
         // Only handle if it's part of this chat
         const involves = [msg.sender, msg.recipient].map(String);
         if (!(involves.includes(String(user?.id)) && involves.includes(String(otherId)))) return;
+
+        // Any delivered message for this chat should hide typing immediately
+        if (typingClearRef.current) {
+          clearTimeout(typingClearRef.current);
+          typingClearRef.current = null;
+        }
+        setTyping(false);
 
         const key = String(msg.clientId || msg._id);
         if (seenRef.current.has(key)) return; // already handled
@@ -592,6 +641,7 @@ export default function ConversationPage({ params }) {
           s.off('messages_seen');
           s.off('error_message');
           s.off('presence_update', onPresence);
+          s.off('connect');
         }
         if (typingClearRef.current) {
           clearTimeout(typingClearRef.current);
@@ -649,6 +699,15 @@ export default function ConversationPage({ params }) {
     // Clear input immediately for better UX
     setInput("");
     
+    // Stop indicating typing to the recipient immediately on send
+    try {
+      socketRef.current.emit('typing', { to: otherId, isTyping: false });
+    } catch {}
+    if (typingEmitRef.current) {
+      clearTimeout(typingEmitRef.current);
+      typingEmitRef.current = null;
+    }
+
     // Emit via socket
     try {
       socketRef.current.emit("send_message", { to: otherId, text, clientId });
@@ -714,7 +773,8 @@ export default function ConversationPage({ params }) {
 
         {/* Messages list */}
         <ScrollArea ref={viewportRef} className="flex-1 px-4 py-2">
-          <div className="space-y-1 pb-4">
+          {/* Add generous bottom padding so last messages are never hidden behind the composer */}
+          <div className="space-y-1" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
             {groups.filter(g => g && g.type).map((g, idx) => {
               const uniqueKey = `item-${idx}-${g.type}-${g.m?.ts || Date.now()}`;
               if (g.type === "divider") return <DayDivider key={uniqueKey} label={g.label} />;
@@ -749,6 +809,7 @@ export default function ConversationPage({ params }) {
                     compact={compact}
                     tail={g.m.isLastInGroup}
                     status={g.m.status}
+                    onRetry={g.m.mine && g.m.status === 'failed' ? () => retryMessage(g.m) : undefined}
                   />
                 </motion.div>
               );
@@ -766,7 +827,8 @@ export default function ConversationPage({ params }) {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div ref={bottomRef} className="h-20" />
+            {/* Spacer to ensure smooth scroll-to-bottom above the composer */}
+            <div ref={bottomRef} className="h-28" />
           </div>
         </ScrollArea>
 

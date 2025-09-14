@@ -46,7 +46,6 @@ export default function ChatPage() {
   const [loadingStates, setLoadingStates] = useState({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [requestsOpen, setRequestsOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -83,6 +82,30 @@ export default function ChatPage() {
     };
   }, [accessToken]);
 
+  // Also listen to socket events directly to avoid needing a manual refresh
+  useEffect(() => {
+    if (!accessToken) return;
+    let s;
+    (async () => {
+      const { getSocket } = await import("../../lib/socket");
+      s = getSocket(accessToken);
+      const refresh = async () => {
+        try {
+          const res = await api.conversations(accessToken);
+          setConversations(res.conversations || []);
+        } catch {}
+      };
+      s.on('conversation_request', refresh);
+      s.on('conversation_accepted', refresh);
+    })();
+    return () => {
+      try {
+        s?.off('conversation_request');
+        s?.off('conversation_accepted');
+      } catch {}
+    };
+  }, [accessToken]);
+
   useEffect(() => {
     const onNew = async (e) => {
       const { otherId, isInThisChat } = e.detail || {};
@@ -104,9 +127,19 @@ export default function ChatPage() {
     };
     window.addEventListener("chat:new-message", onNew);
     window.addEventListener("chat:clear-unread", onClear);
+    const onRefresh = async () => {
+      if (accessToken) {
+        try {
+          const res = await api.conversations(accessToken);
+          setConversations(res.conversations || []);
+        } catch {}
+      }
+    };
+    window.addEventListener('chat:refresh-conversations', onRefresh);
     return () => {
       window.removeEventListener("chat:new-message", onNew);
       window.removeEventListener("chat:clear-unread", onClear);
+      window.removeEventListener('chat:refresh-conversations', onRefresh);
     };
   }, [accessToken]);
 
@@ -241,9 +274,11 @@ export default function ChatPage() {
         <div className="h-16 px-3 sm:px-4 flex items-center justify-between">
           <h1 className="text-lg sm:text-xl font-semibold text-foreground">Messages</h1>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="h-9 w-9 sm:h-10 sm:w-10 p-0" onClick={() => setRequestsOpen(true)} title="Requests">
-              <Users className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Button>
+            <Link href="/requests" title="Requests">
+              <Button variant="ghost" size="sm" className="h-9 w-9 sm:h-10 sm:w-10 p-0">
+                <Users className="h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
+            </Link>
             <Link href="/profile" className="hidden sm:block">
               <Button variant="ghost" size="sm" className="h-9 w-9 sm:h-10 sm:w-10 p-0">
                 <User className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -334,9 +369,23 @@ export default function ChatPage() {
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <h3 className="font-semibold text-sm sm:text-base text-foreground truncate">
-                            {conv.otherUser?.name || conv.name || `${conv.otherUser?.countryCode || ''} ${conv.otherUser?.phoneNumber || ''}`.trim() || 'User'}
-                          </h3>
+                          {(() => {
+                            const key = conv.otherUser?.id || conv.otherId;
+                            const count = unread[key] || 0;
+                            const titleText = conv.otherUser?.name || conv.name || `${conv.otherUser?.countryCode || ''} ${conv.otherUser?.phoneNumber || ''}`.trim() || 'User';
+                            return (
+                              <div className="flex items-center gap-2 min-w-0">
+                                <h3 className={`text-sm sm:text-base truncate ${count > 0 ? 'font-bold text-foreground' : 'font-semibold text-foreground'}`}>
+                                  {titleText}
+                                </h3>
+                                {count > 0 && (
+                                  <span className="shrink-0 inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-red-600 text-white text-[11px] font-medium">
+                                    {count}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                           <div className="flex items-center gap-1">
                             <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
                               {conv.lastMessage?.createdAt ? formatTime(conv.lastMessage.createdAt) : ''}
@@ -439,80 +488,6 @@ export default function ChatPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Requests dialog */}
-        <Dialog open={requestsOpen} onOpenChange={setRequestsOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Requests</DialogTitle>
-              <DialogDescription>Manage your incoming and sent requests.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              {/* Incoming */}
-              <div>
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Incoming</div>
-                <div className="space-y-2">
-                  {conversations.filter(c => c.isPending && !c.isRequestedByMe).map((req) => {
-                    const title = req.otherUser?.name || `${req.otherUser?.countryCode || ''} ${req.otherUser?.phoneNumber || ''}`.trim();
-                    return (
-                      <Card key={`reqdlg-in-${req.id}`} className="p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <Avatar className="w-8 h-8"><AvatarFallback>{getInitials(title || 'U')}</AvatarFallback></Avatar>
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium truncate">{title || 'Unknown'}</div>
-                              <div className="text-xs text-muted-foreground">Incoming request</div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button size="sm" variant="secondary" disabled={!!loadingStates[req.id]} onClick={() => handleDeclineRequest(req.id)}>Decline</Button>
-                            <Button size="sm" className="bg-gradient-to-r from-orange-500 to-red-600 text-white" disabled={!!loadingStates[req.id]} onClick={() => handleAccept(req)}>
-                              {loadingStates[req.id] ? '...' : 'Accept'}
-                            </Button>
-                          </div>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                  {conversations.filter(c => c.isPending && !c.isRequestedByMe).length === 0 && (
-                    <div className="text-xs text-muted-foreground">No incoming requests</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Sent */}
-              <div>
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Sent</div>
-                <div className="space-y-2">
-                  {conversations.filter(c => c.isPending && c.isRequestedByMe).map((req) => {
-                    const title = req.otherUser?.name || `${req.otherUser?.countryCode || ''} ${req.otherUser?.phoneNumber || ''}`.trim();
-                    return (
-                      <Card key={`reqdlg-out-${req.id}`} className="p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <Avatar className="w-8 h-8"><AvatarFallback>{getInitials(title || 'U')}</AvatarFallback></Avatar>
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium truncate">{title || 'Unknown'}</div>
-                              <div className="text-xs text-muted-foreground">Waiting for acceptance</div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button size="sm" variant="secondary" disabled={!!loadingStates[req.id]} onClick={() => handleDeclineRequest(req.id)}>Cancel</Button>
-                          </div>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                  {conversations.filter(c => c.isPending && c.isRequestedByMe).length === 0 && (
-                    <div className="text-xs text-muted-foreground">No sent requests</div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="secondary" onClick={() => setRequestsOpen(false)}>Close</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   );

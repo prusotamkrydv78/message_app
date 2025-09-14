@@ -140,34 +140,18 @@ export default function GroupsPage() {
       if (!accessToken) return;
       setLoadingGroups(true);
       try {
-        // Mock data for now - replace with actual API call
-        const mockGroups = [
-          {
-            id: "1",
-            name: "Team Alpha",
-            memberCount: 8,
-            isAdmin: true,
-            lastActivity: new Date().toISOString(),
-            unreadCount: 3
-          },
-          {
-            id: "2", 
-            name: "Project Beta",
-            memberCount: 12,
-            isAdmin: false,
-            lastActivity: new Date(Date.now() - 86400000).toISOString(),
-            unreadCount: 0
-          },
-          {
-            id: "3",
-            name: "Design Team",
-            memberCount: 5,
-            isAdmin: true,
-            lastActivity: new Date(Date.now() - 172800000).toISOString(),
-            unreadCount: 1
-          }
-        ];
-        if (!abort) setGroups(mockGroups);
+        const res = await api.groups(accessToken);
+        if (!abort) {
+          const list = (res.groups || []).map(g => ({
+            id: g.id || g._id,
+            name: g.name,
+            memberCount: g.memberCount || 0,
+            isAdmin: String(g.owner) === String(user?.id),
+            lastActivity: g.updatedAt || g.createdAt,
+            unreadCount: 0,
+          }));
+          setGroups(list);
+        }
       } catch (e) {
         if (!abort) setGroups([]);
       } finally {
@@ -175,7 +159,7 @@ export default function GroupsPage() {
       }
     })();
     return () => { abort = true; };
-  }, [accessToken]);
+  }, [accessToken, user?.id]);
 
   const filteredGroups = groups.filter(g => 
     g.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -225,14 +209,16 @@ export default function GroupsPage() {
         <div className="flex-1 overflow-hidden">
           <div className="px-3 sm:px-4 py-3 flex items-center justify-between bg-white/30">
             <h3 className="text-xs sm:text-sm font-semibold text-muted-foreground">Your Groups</h3>
-            <Button 
-              size="sm" 
-              className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3"
-            >
-              <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">New Group</span>
-              <span className="sm:hidden">New</span>
-            </Button>
+            <Link href="/groups/new">
+              <Button 
+                size="sm" 
+                className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3"
+              >
+                <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">New Group</span>
+                <span className="sm:hidden">New</span>
+              </Button>
+            </Link>
           </div>
 
           <ScrollArea className="h-full" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
@@ -268,10 +254,12 @@ export default function GroupsPage() {
                       }
                     </p>
                     {!searchQuery && (
-                      <Button className="bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 h-10 sm:h-11 text-sm sm:text-base px-4 sm:px-6">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create Group
-                      </Button>
+                      <Link href="/groups/new">
+                        <Button className="bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 h-10 sm:h-11 text-sm sm:text-base px-4 sm:px-6">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create Group
+                        </Button>
+                      </Link>
                     )}
                   </motion.div>
                 ) : (
@@ -294,12 +282,14 @@ export default function GroupsPage() {
           className="fixed bottom-6 right-6"
           style={{ bottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }}
         >
-          <Button
-            size="lg"
-            className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 shadow-lg hover:shadow-xl transition-all active:scale-95"
-          >
-            <UserPlus className="w-5 h-5 sm:w-6 sm:h-6" />
-          </Button>
+          <Link href="/groups/new">
+            <Button
+              size="lg"
+              className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 shadow-lg hover:shadow-xl transition-all active:scale-95"
+            >
+              <UserPlus className="w-5 h-5 sm:w-6 sm:h-6" />
+            </Button>
+          </Link>
         </motion.div>
       </div>
       

@@ -1,7 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
-import NotificationsProvider from "../components/notifications";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,8 +27,7 @@ export default function RootLayout({ children }) {
           <main className="min-h-[100dvh] flex flex-col">
             {children}
           </main>
-          {/* Global notifications (new messages etc.) */}
-          <NotificationsProvider />
+          {/* Global notifications are rendered in Providers (app/providers.js) */}
         </Providers>
       </body>
     </html>
