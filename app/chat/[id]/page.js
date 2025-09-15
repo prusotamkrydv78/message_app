@@ -451,7 +451,7 @@ export default function ConversationPage({ params }) {
           const newState = { ...prev, status };
           if (status === 'connected' && cm.remoteStream && remoteAudioRef.current) {
             remoteAudioRef.current.srcObject = cm.remoteStream;
-            remoteAudioRef.current.play().catch(console.error);
+            remoteAudioRef.current.play().catch(() => {});
           }
           // update call record meta
           if (status === 'calling') {
@@ -499,7 +499,7 @@ export default function ConversationPage({ params }) {
     };
     
     cm.onCallError = (error) => {
-      console.error('Call error:', error);
+      //console.error('Call error:', error);
       setCallState(null);
     };
     
@@ -712,7 +712,7 @@ export default function ConversationPage({ params }) {
     try {
       socketRef.current.emit("send_message", { to: otherId, text, clientId });
     } catch (error) {
-      console.error("Failed to send message:", error);
+      //console.error("Failed to send message:", error);
       // Revert optimistic update on error
       setMessages((prev) => prev.filter(m => m.clientId !== clientId));
       setInput(text); // Restore input
@@ -910,6 +910,7 @@ export default function ConversationPage({ params }) {
             onDecline={() => callManager?.declineCall()}
             onEndCall={() => callManager?.endCall()}
             onToggleMute={() => callManager?.toggleMute()}
+            onToggleCamera={() => callManager?.toggleCamera?.()}
             isVideo={!!callState.isVideo}
             localStream={callManager?.localStream || null}
             remoteStream={callManager?.remoteStream || null}

@@ -30,7 +30,7 @@ export default function ProfilePage() {
       await logout();
       router.replace("/login");
     } catch (error) {
-      console.error("Logout failed:", error);
+      //console.error("Logout failed:", error);
     } finally {
       setLoggingOut(false);
     }

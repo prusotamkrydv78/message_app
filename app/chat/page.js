@@ -157,7 +157,7 @@ export default function ChatPage() {
       await api.deleteConversation(accessToken, conversationId);
       setConversations(prev => prev.filter(c => c.id !== conversationId));
     } catch (error) {
-      console.error("Failed to delete conversation:", error);
+      //console.error("Failed to delete conversation:", error);
     } finally {
       setDeletingConversation(null);
     }
@@ -184,7 +184,7 @@ export default function ChatPage() {
       // Redirect to individual chat page with required params for [id]/page.js
       router.push(`/chat/${encodeURIComponent(conversationId)}?otherId=${encodeURIComponent(otherId)}&name=${encodeURIComponent(title)}&phone=${encodeURIComponent(phone)}`);
     } catch (error) {
-      console.error('Error accepting conversation:', error);
+      //console.error('Error accepting conversation:', error);
       toast({
         title: "Failed to accept",
         description: "Could not accept the connection request. Please try again.",
@@ -207,7 +207,7 @@ export default function ChatPage() {
         description: "Connection request has been declined.",
       });
     } catch (error) {
-      console.error("Failed to decline request:", error);
+      //console.error("Failed to decline request:", error);
       toast({
         title: "Failed to decline",
         description: "Could not decline the request. Please try again.",
@@ -229,7 +229,7 @@ export default function ChatPage() {
       await logout();
       router.replace("/login");
     } catch (error) {
-      console.error("Logout failed:", error);
+      //console.error("Logout failed:", error);
       toast({
         title: "Logout failed",
         description: "Please try again.",

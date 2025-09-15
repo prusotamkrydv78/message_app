@@ -35,6 +35,7 @@ export default function CallModal({
   onEndCall,
   onToggleMute,
   onToggleVideo,
+  onToggleCamera,
   isVideo = false,
   localStream,
   remoteStream,
@@ -56,6 +57,24 @@ export default function CallModal({
     }
     return () => clearInterval(interval);
   }, [status]);
+
+  // Wake Lock to prevent screen sleep during calls (where supported)
+  useEffect(() => {
+    let wakeLock = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator && status && status !== 'ended') {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener?.('release', () => {});
+        }
+      } catch {}
+    };
+    requestWakeLock();
+    return () => {
+      try { wakeLock?.release?.(); } catch {}
+      wakeLock = null;
+    };
+  }, [status, isOpen]);
 
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -126,9 +145,21 @@ export default function CallModal({
           {isVideo ? (
             <div className="relative bg-black h-full sm:h-auto">
               {/* Remote video */}
-              <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-[calc(100vh-200px)] sm:h-[420px] object-cover bg-black" />
+              <video
+                ref={remoteVideoRef}
+                autoPlay
+                playsInline
+                className="w-full object-cover bg-black"
+                style={{ height: 'calc(100dvh - 200px)' }}
+              />
               {/* Local video pip */}
-              <video ref={localVideoRef} autoPlay muted playsInline className="absolute bottom-24 right-4 sm:bottom-4 w-28 h-20 sm:w-40 sm:h-24 object-cover rounded-lg shadow-lg border border-white/20 bg-black" />
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="absolute bottom-24 right-4 sm:bottom-4 w-28 h-20 sm:w-40 sm:h-24 object-cover rounded-lg shadow-lg border border-white/20 bg-black"
+              />
 
               {/* Bottom panel for mobile */}
               <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t sm:static sm:bg-transparent" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.5rem)' }}>
@@ -172,6 +203,14 @@ export default function CallModal({
                           <Button onClick={handleVideoToggle} variant={videoOff ? 'destructive' : 'secondary'} className="w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg">
                             {videoOff ? <IconVideoOff className="w-5 h-5 sm:w-6 sm:h-6" /> : <IconVideo className="w-5 h-5 sm:w-6 sm:h-6" />}
                           </Button>
+                          {isVideo && typeof onToggleCamera === 'function' && (
+                            <Button onClick={onToggleCamera} variant={'secondary'} className="w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg">
+                              {/* Simple flip icon using two triangles */}
+                              <svg className="w-5 h-5 sm:w-6 sm:h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="4 7 4 4 7 4" /><line x1="4" y1="4" x2="10" y2="10" /><polyline points="20 17 20 20 17 20" /><line x1="20" y1="20" x2="14" y2="14" />
+                              </svg>
+                            </Button>
+                          )}
                         </>
                       )}
                       <Button onClick={onEndCall} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg">
