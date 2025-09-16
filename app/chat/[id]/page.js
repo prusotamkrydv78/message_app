@@ -490,6 +490,8 @@ export default function ConversationPage({ params }) {
   const [lightboxZoom, setLightboxZoom] = useState(1);
   const [lightboxLoading, setLightboxLoading] = useState(false);
   const [showLightboxControls, setShowLightboxControls] = useState(true);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const gestureRef = useRef({ active: false, startX: 0, startY: 0, lastX: 0, lastY: 0, moved: false });
   const typingEmitRef = useRef(null);
   const callMetaRef = useRef({ direction: null, isVideo: false, startedAt: null, connected: false, logged: false });
   const lastPersistRef = useRef(0);
@@ -532,6 +534,7 @@ export default function ConversationPage({ params }) {
     if (!lightboxImages.length) return;
     setLightboxLoading(true);
     setLightboxZoom(1);
+    setPan({ x: 0, y: 0 });
     const newIndex = direction > 0 
       ? (lightboxIndex + 1) % lightboxImages.length
       : (lightboxIndex - 1 + lightboxImages.length) % lightboxImages.length;
@@ -556,6 +559,25 @@ export default function ConversationPage({ params }) {
       window.removeEventListener('mousemove', onMove);
     };
   }, [lightboxOpen, lightboxIndex]);
+
+  // Body scroll lock when lightbox is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    if (lightboxOpen) document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [lightboxOpen]);
+
+  // Preload neighbor images for snappier nav
+  useEffect(() => {
+    if (!lightboxImages.length) return;
+    const prev = (lightboxIndex - 1 + lightboxImages.length) % lightboxImages.length;
+    const next = (lightboxIndex + 1) % lightboxImages.length;
+    [prev, next].forEach(i => {
+      const url = lightboxImages[i];
+      const img = new Image();
+      img.src = url;
+    });
+  }, [lightboxIndex, lightboxImages]);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -1167,9 +1189,10 @@ export default function ConversationPage({ params }) {
 
         {/* Messages list */}
         <ScrollArea ref={viewportRef} className="flex-1 px-4 py-2">
-          {/* Add generous bottom padding so last messages are never hidden behind the composer */}
-          <div className="space-y-1" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}>
-            {groups.filter(g => g && g.type).map((g, idx) => {
+          {/* Keep chat height stable and pin content to bottom for short conversations */}
+          <div className="min-h-full flex flex-col justify-end">
+            <div className="space-y-1 pb-[calc(env(safe-area-inset-bottom,0px)+96px)]">
+              {groups.filter(g => g && g.type).map((g, idx) => {
               const uniqueKey = `item-${idx}-${g.type}-${g.m?.ts || Date.now()}`;
               if (g.type === "divider") return <DayDivider key={uniqueKey} label={g.label} />;
               if (g.type === 'call') {
@@ -1218,22 +1241,23 @@ export default function ConversationPage({ params }) {
                   />
                 </motion.div>
               );
-            })}
-            <AnimatePresence>
-              {typing && atBottom && (
-                <motion.div
-                  key="typing"
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.18 }}
-                >
-                  <TypingIndicator />
-                </motion.div>
-              )}
-            </AnimatePresence>
-            {/* Spacer to ensure smooth scroll-to-bottom above the composer */}
-            <div ref={bottomRef} className="h-28" />
+              })}
+              <AnimatePresence>
+                {typing && atBottom && (
+                  <motion.div
+                    key="typing"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    <TypingIndicator />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              {/* Anchor for keeping latest message just above the input */}
+              <div ref={bottomRef} />
+            </div>
           </div>
         </ScrollArea>
 
