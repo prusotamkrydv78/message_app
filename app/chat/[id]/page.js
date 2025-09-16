@@ -4,7 +4,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Phone, Video, MoreVertical, Smile, Paperclip, Send, ChevronDown } from "lucide-react";
+import { ArrowLeft, Phone, Video, MoreVertical, Smile, Paperclip, Send, ChevronDown, X, FileText, FileArchive, File, RefreshCw, ZoomIn, ZoomOut, RotateCcw, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "../../../components/ui/avatar";
 import { Button } from "../../../components/ui/button";
@@ -212,7 +212,168 @@ function Tick({ state }) {
   );
 }
 
-function Message({ mine, text, time, compact, tail, status, onRetry }) {
+function formatBytes(bytes) {
+  if (!bytes && bytes !== 0) return '';
+  const units = ['B','KB','MB','GB'];
+  let v = bytes; let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v % 1 === 0 ? v : v.toFixed(1)} ${units[i]}`;
+}
+
+function fileIconFor(att) {
+  const name = (att.filename || att.original_filename || '').toLowerCase();
+  if (name.endsWith('.pdf')) return FileText;
+  if (name.endsWith('.zip') || name.endsWith('.rar') || name.endsWith('.7z')) return FileArchive;
+  return File;
+}
+
+function AttachmentPreview({ att, uploading, onOpenImage, onRetry, className = '' }) {
+  if (!att) return null;
+  const isImage = (att.type === 'image') || (att.mimeType || '').startsWith('image/');
+  const isVideo = (att.type === 'video') || (att.mimeType || '').startsWith('video/');
+  const href = att.secure_url || att.url || att.localUrl || '#';
+  const src = att.localUrl || att.secure_url || att.url;
+  const progress = typeof att._progress === 'number' ? att._progress : (uploading ? 0 : 1);
+  const hasError = !!att._error;
+
+  if (isImage) {
+    return (
+      <div onClick={() => onOpenImage?.(src || href)} className={`relative block overflow-hidden rounded-xl border bg-white shadow-sm cursor-zoom-in hover:ring-2 hover:ring-blue-500/40 transition-shadow ${className}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={att.filename || 'image'}
+          className="w-full max-w-[300px] md:max-w-[380px] max-h-72 object-cover select-none"
+          draggable={false}
+        />
+        {uploading && !hasError && (
+          <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none">
+            <div className="h-8 w-8 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+        {uploading && !hasError && (
+          <div className="absolute bottom-0 left-0 right-0 h-1.5 md:h-2 bg-white/40">
+            <div className="h-full bg-blue-600/90 transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
+          </div>
+        )}
+        {hasError && (
+          <div className="absolute inset-0 bg-black/40 text-white flex items-center justify-center gap-2 text-sm">
+            <span>Upload failed</span>
+            {onRetry && (
+              <button type="button" onClick={(e) => { e.preventDefault(); onRetry(); }} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/20 hover:bg-white/30">
+                <RefreshCw className="h-3.5 w-3.5" /> Retry
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+  if (isVideo) {
+    return (
+      <div className={`relative rounded-xl overflow-hidden border bg-black shadow-sm ${className || 'max-w-[300px] md:max-w-[380px]' }`}>
+        <video controls className="w-full h-auto">
+          <source src={src} type={att.mimeType || 'video/mp4'} />
+        </video>
+        {uploading && !hasError && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
+            <div className="h-8 w-8 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+        {uploading && !hasError && (
+          <div className="absolute bottom-0 left-0 right-0 h-1.5 md:h-2 bg-white/30">
+            <div className="h-full bg-blue-500 transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
+          </div>
+        )}
+        {hasError && (
+          <div className="absolute inset-0 bg-black/60 text-white flex items-center justify-center gap-2 text-sm">
+            <span>Upload failed</span>
+            {onRetry && (
+              <button type="button" onClick={(e) => { e.preventDefault(); onRetry(); }} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/20 hover:bg-white/30">
+                <RefreshCw className="h-3.5 w-3.5" /> Retry
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+  const Icon = fileIconFor(att);
+  return (
+    <div className={`relative inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white shadow-sm ${className || 'max-w-[280px]' }`}>
+      <Icon className="h-4 w-4 text-blue-600" />
+      <a href={href} target="_blank" rel="noreferrer" className="font-medium truncate flex-1">
+        {att.filename || att.original_filename || 'file'}
+      </a>
+      {!!att.bytes && <span className="text-xs text-muted-foreground whitespace-nowrap">{formatBytes(att.bytes)}</span>}
+      {uploading && !hasError && <span className="ml-1 h-3 w-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />}
+      {hasError && onRetry && (
+        <button type="button" onClick={onRetry} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-rose-50 text-rose-600 border border-rose-200 text-xs">
+          <RefreshCw className="h-3 w-3" /> Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Top-level Gallery (polished image grid for 1-4+ images)
+function Gallery({ items = [], onOpen, onRetry, msgKey }) {
+  const allImages = items.every(a => (a.type === 'image') || ((a.mimeType||'').startsWith('image/')));
+  if (!allImages) {
+    return (
+      <div className="grid grid-cols-1 gap-2">
+        {items.map((att, idx) => (
+          <AttachmentPreview key={idx} att={att} uploading={!!att._uploading} onOpenImage={(url) => onOpen?.(idx, url)} onRetry={onRetry ? () => onRetry(msgKey, idx) : undefined} />
+        ))}
+      </div>
+    );
+  }
+  const n = items.length;
+  if (n === 1) {
+    return (
+      <AttachmentPreview att={items[0]} uploading={!!items[0]._uploading} onOpenImage={(url) => onOpen?.(0, url)} onRetry={onRetry ? () => onRetry(msgKey, 0) : undefined} className="w-full max-w-[380px]" />
+    );
+  }
+  if (n === 2) {
+    return (
+      <div className="grid grid-cols-2 gap-2 max-w-[520px]">
+        {items.map((att, idx) => (
+          <AttachmentPreview key={idx} att={att} uploading={!!att._uploading} onOpenImage={(url) => onOpen?.(idx, url)} onRetry={onRetry ? () => onRetry(msgKey, idx) : undefined} className="w-full" />
+        ))}
+      </div>
+    );
+  }
+  if (n === 3) {
+    return (
+      <div className="grid grid-cols-2 gap-2 max-w-[560px]">
+        <AttachmentPreview att={items[0]} uploading={!!items[0]._uploading} onOpenImage={(url) => onOpen?.(0, url)} onRetry={onRetry ? () => onRetry(msgKey, 0) : undefined} className="row-span-2 h-full" />
+        <AttachmentPreview att={items[1]} uploading={!!items[1]._uploading} onOpenImage={(url) => onOpen?.(1, url)} onRetry={onRetry ? () => onRetry(msgKey, 1) : undefined} />
+        <AttachmentPreview att={items[2]} uploading={!!items[2]._uploading} onOpenImage={(url) => onOpen?.(2, url)} onRetry={onRetry ? () => onRetry(msgKey, 2) : undefined} />
+      </div>
+    );
+  }
+  const visible = items.slice(0, 4);
+  const remaining = n - 4;
+  return (
+    <div className="grid grid-cols-2 gap-2 max-w-[560px]">
+      {visible.map((att, idx) => {
+        const isLast = idx === 3 && remaining > 0;
+        return (
+          <div key={idx} className="relative">
+            <AttachmentPreview att={att} uploading={!!att._uploading} onOpenImage={(url) => onOpen?.(idx, url)} onRetry={onRetry ? () => onRetry(msgKey, idx) : undefined} className="w-full" />
+            {isLast && (
+              <button type="button" onClick={() => onOpen?.(idx, att.secure_url || att.url || att.localUrl)} className="absolute inset-0 bg-black/40 text-white text-2xl font-semibold flex items-center justify-center rounded-xl">
+                +{remaining}
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Message({ mine, text, attachments, time, compact, tail, status, onRetry, msgKey, onRetryAttachment, onOpenLightbox }) {
   const containerGap = compact ? "-mt-1" : "mt-2";
   // detect emoji-only
   const clean = (text || '').trim();
@@ -220,7 +381,7 @@ function Message({ mine, text, time, compact, tail, status, onRetry }) {
   const isEmojiOnly = clean.length > 0 && emojiMatches.length > 0 && clean.replace(/\p{Extended_Pictographic}|\p{Emoji_Component}|\u200D|\uFE0F/gu, '').trim().length === 0;
   const emojiCount = emojiMatches.length;
 
-  if (isEmojiOnly) {
+  if (isEmojiOnly && (!attachments || attachments.length === 0)) {
     const sizeClass = emojiCount <= 3 ? 'text-5xl' : 'text-2xl';
     return (
       <div className={`w-full flex ${mine ? 'justify-end' : 'justify-start'} ${containerGap}`}>
@@ -234,18 +395,38 @@ function Message({ mine, text, time, compact, tail, status, onRetry }) {
     );
   }
 
-  const baseBubble = "max-w-[76%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed";
+  const baseBubble = "max-w-[76%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed";
   const shadow = compact ? "shadow-none" : "shadow-sm";
+  const hasMedia = !!(attachments && attachments.length);
   const colors = mine 
-    ? "bg-gradient-to-r from-orange-500 to-red-600 text-white" 
+    ? (hasMedia ? "bg-white border text-foreground" : "bg-gradient-to-r from-orange-500 to-red-600 text-white")
     : "bg-white border text-foreground";
   
   return (
     <div className={`w-full flex ${mine ? "justify-end" : "justify-start"} ${containerGap}`}>
       <div className={`relative ${baseBubble} ${colors} ${shadow} transition-all duration-200 hover:shadow-md`}>
-        <div className="whitespace-pre-wrap break-words">{text}</div>
+        {attachments && attachments.length > 0 && (
+          <div className={`${text ? 'mb-2' : ''}`}>
+            <Gallery
+              items={attachments}
+              msgKey={msgKey}
+              onRetry={onRetryAttachment}
+              onOpen={(idx, url) => { try {
+                const imgs = attachments
+                  .filter(a => (a.type === 'image') || ((a.mimeType||'').startsWith('image/')))
+                  .map(a => a.secure_url || a.url || a.localUrl)
+                  .filter(Boolean);
+                const chosen = url || imgs[idx] || null;
+                if (chosen) {
+                  onOpenLightbox && onOpenLightbox(chosen, imgs, Math.max(0, imgs.indexOf(chosen)));
+                }
+              } catch {} }}
+            />
+          </div>
+        )}
+        {!!text && <div className="whitespace-pre-wrap break-words">{text}</div>}
         {!!time && (
-          <div className={`text-xs mt-1.5 flex items-center gap-2 ${mine ? "text-white/80" : "text-muted-foreground"}`}>
+          <div className={`text-xs mt-1.5 flex items-center gap-2 ${mine ? (hasMedia ? "text-muted-foreground" : "text-white/80") : "text-muted-foreground"}`}>
             <span>{time}</span>
             {mine && <Tick state={status} />}
             {mine && status === 'failed' && (
@@ -260,7 +441,7 @@ function Message({ mine, text, time, compact, tail, status, onRetry }) {
             )}
           </div>
         )}
-        {tail && !compact && (
+        {tail && !compact && !hasMedia && (
           <span
             className={`absolute bottom-0 ${mine ? 'right-0 translate-x-2' : 'left-0 -translate-x-2'} translate-y-1 w-3 h-3 ${mine ? 'bg-gradient-to-r from-orange-500 to-red-600' : 'bg-white border-l border-b'} transform rotate-45`}
           />
@@ -284,6 +465,8 @@ export default function ConversationPage({ params }) {
   const otherId = searchParams.get("otherId") || resolvedParams.id || "";
 
   const [input, setInput] = useState("");
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
   const [typing, setTyping] = useState(false);
   const typingClearRef = useRef(null);
   const [messages, setMessages] = useState([]); // each: {id, mine, text, ts, status}
@@ -300,12 +483,79 @@ export default function ConversationPage({ params }) {
   const remoteAudioRef = useRef(null);
   const composerRef = useRef(null);
   const [isOnline, setIsOnline] = useState(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState(null);
+  const [lightboxImages, setLightboxImages] = useState([]); // array of urls
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxZoom, setLightboxZoom] = useState(1);
+  const [lightboxLoading, setLightboxLoading] = useState(false);
+  const [showLightboxControls, setShowLightboxControls] = useState(true);
   const typingEmitRef = useRef(null);
   const callMetaRef = useRef({ direction: null, isVideo: false, startedAt: null, connected: false, logged: false });
   const lastPersistRef = useRef(0);
   const resendLockRef = useRef(false);
   const [conversationId, setConversationId] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Enhanced lightbox keyboard controls
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') setLightboxOpen(false);
+      if (!lightboxOpen) return;
+      if (e.key === 'ArrowRight' || e.key === ' ') {
+        e.preventDefault();
+        navigateLightbox(1);
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigateLightbox(-1);
+      }
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        setLightboxZoom(z => Math.min(z * 1.2, 3));
+      }
+      if (e.key === '-') {
+        e.preventDefault();
+        setLightboxZoom(z => Math.max(z / 1.2, 0.5));
+      }
+      if (e.key === '0') {
+        e.preventDefault();
+        setLightboxZoom(1);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxOpen]);
+
+  // Navigate lightbox with smooth transitions
+  const navigateLightbox = (direction) => {
+    if (!lightboxImages.length) return;
+    setLightboxLoading(true);
+    setLightboxZoom(1);
+    const newIndex = direction > 0 
+      ? (lightboxIndex + 1) % lightboxImages.length
+      : (lightboxIndex - 1 + lightboxImages.length) % lightboxImages.length;
+    setLightboxIndex(newIndex);
+    setLightboxUrl(lightboxImages[newIndex]);
+    setTimeout(() => setLightboxLoading(false), 150);
+  };
+
+  // Auto-hide controls in lightbox
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    setShowLightboxControls(true);
+    const timer = setTimeout(() => setShowLightboxControls(false), 3000);
+    const onMove = () => {
+      setShowLightboxControls(true);
+      clearTimeout(timer);
+      setTimeout(() => setShowLightboxControls(false), 3000);
+    };
+    window.addEventListener('mousemove', onMove);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('mousemove', onMove);
+    };
+  }, [lightboxOpen, lightboxIndex]);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -369,6 +619,7 @@ export default function ConversationPage({ params }) {
           id: m._id || idx,
           mine: String(m.sender) === String(user?.id),
           text: m.text,
+          attachments: m.attachments || [],
           ts: new Date(m.createdAt).getTime(),
           status: String(m.sender) === String(user?.id) ? 'sent' : undefined,
         }));
@@ -573,14 +824,14 @@ export default function ConversationPage({ params }) {
             const idx = prev.findIndex((m) => m.clientId && String(m.clientId) === String(msg.clientId));
             if (idx !== -1) {
               const clone = prev.slice();
-              clone[idx] = { id: msg._id, clientId: msg.clientId, mine: true, text: msg.text, ts: new Date(msg.createdAt).getTime(), status: 'sent' };
+              clone[idx] = { id: msg._id, clientId: msg.clientId, mine: true, text: msg.text, attachments: msg.attachments || [], ts: new Date(msg.createdAt).getTime(), status: 'sent' };
               return clone;
             }
           }
           const mine = String(msg.sender) === String(user?.id);
           return [
             ...prev,
-            { id: msg._id, clientId: msg.clientId, mine, text: msg.text, ts: new Date(msg.createdAt).getTime(), status: mine ? 'sent' : undefined },
+            { id: msg._id, clientId: msg.clientId, mine, text: msg.text, attachments: msg.attachments || [], ts: new Date(msg.createdAt).getTime(), status: mine ? 'sent' : undefined },
           ];
         });
 
@@ -685,7 +936,7 @@ export default function ConversationPage({ params }) {
 
   const send = () => {
     const text = input.trim();
-    if (!text || !otherId || !socketRef.current) return;
+    if ((!text) || !otherId || !socketRef.current) return;
     
     const clientId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     seenRef.current.add(clientId);
@@ -727,6 +978,149 @@ export default function ConversationPage({ params }) {
         bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
       }
     }, 100);
+  };
+
+  // Attachments: pick files and upload then send as a message
+  const onPickFiles = () => {
+    try { fileInputRef.current?.click(); } catch {}
+  };
+
+  const handleFilesSelected = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length || !accessToken || !socketRef.current || !otherId) return;
+    setUploading(true);
+    const caption = input.trim();
+    // Create local preview attachments
+    const previews = files.map((f) => {
+      const isImg = (f.type || '').startsWith('image/');
+      const isVid = (f.type || '').startsWith('video/');
+      return {
+        filename: f.name,
+        mimeType: f.type,
+        bytes: f.size,
+        type: isImg ? 'image' : (isVid ? 'video' : 'file'),
+        localUrl: URL.createObjectURL(f),
+        _uploading: true,
+        _progress: 0,
+        _file: f,
+      };
+    });
+    const clientId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    seenRef.current.add(clientId);
+    // Optimistic render with local previews
+    setMessages((prev) => [
+      ...prev,
+      { id: clientId, clientId, mine: true, text: caption, attachments: previews, ts: Date.now(), status: 'sending' },
+    ]);
+    // Clear caption input after adding optimistic message
+    if (caption) setInput('');
+
+    try { socketRef.current.emit('typing', { to: otherId, isTyping: false }); } catch {}
+
+    try {
+      // Upload files one by one to get per-file progress
+      const results = new Array(files.length).fill(null);
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        // progress callback to update state
+        const onProgress = (p) => {
+          setMessages((prev) => prev.map(m => {
+            if (m.clientId !== clientId) return m;
+            const atts = (m.attachments || []).slice();
+            if (atts[i]) atts[i] = { ...atts[i], _progress: p };
+            return { ...m, attachments: atts };
+          }));
+        };
+        try {
+          const resp = await api.uploadFile(accessToken, file, onProgress);
+          const arr = resp.attachments || [];
+          if (arr.length) {
+            results[i] = arr[0];
+            // apply uploaded for this index immediately
+            setMessages((prev) => prev.map(m => {
+              if (m.clientId !== clientId) return m;
+              const atts = (m.attachments || []).slice();
+              if (atts[i]) atts[i] = { ...arr[0], _uploading: false };
+              return { ...m, attachments: atts };
+            }));
+          }
+        } catch (err) {
+          // mark this attachment as failed
+          setMessages((prev) => prev.map(m => {
+            if (m.clientId !== clientId) return m;
+            const atts = (m.attachments || []).slice();
+            if (atts[i]) atts[i] = { ...atts[i], _uploading: false, _error: true };
+            return { ...m, attachments: atts };
+          }));
+        }
+      }
+      // Only emit when all succeeded
+      if (results.every(Boolean)) {
+        const uploaded = results.map(a => ({ ...a, _uploading: false }));
+        setMessages((prev) => prev.map(m => (
+          m.clientId === clientId
+            ? { ...m, attachments: uploaded }
+            : m
+        )));
+        socketRef.current.emit('send_message', { to: otherId, text: caption, attachments: uploaded, clientId });
+      }
+    } catch (err) {
+      // Keep optimistic message; already marked failed attachments above
+      try { toast({ title: 'Upload failed', description: err?.message || 'Please try again.', variant: 'destructive' }); } catch {}
+    } finally {
+      setUploading(false);
+      try { (e.target.files || []).forEach(f => URL.revokeObjectURL && URL.revokeObjectURL(f)); } catch {}
+      try { e.target.value = ''; } catch {}
+    }
+  };
+
+  // Retry a specific attachment upload by message clientId/id and attachment index
+  const retryUploadAttachment = async (messageKey, attIndex) => {
+    if (!accessToken) return;
+    const msg = (messages || []).find(m => String(m.clientId || m.id) === String(messageKey));
+    if (!msg) return;
+    const att = (msg.attachments || [])[attIndex];
+    if (!att || !att._file) return;
+    try {
+      // reset error and set uploading
+      setMessages((prev) => prev.map(m => {
+        if (String(m.clientId || m.id) !== String(messageKey)) return m;
+        const atts = (m.attachments || []).slice();
+        if (atts[attIndex]) atts[attIndex] = { ...atts[attIndex], _error: false, _uploading: true, _progress: 0 };
+        return { ...m, attachments: atts };
+      }));
+      const resp = await api.uploadFile(accessToken, att._file, (p) => {
+        setMessages((prev) => prev.map(m => {
+          if (String(m.clientId || m.id) !== String(messageKey)) return m;
+          const atts = (m.attachments || []).slice();
+          if (atts[attIndex]) atts[attIndex] = { ...atts[attIndex], _progress: p };
+          return { ...m, attachments: atts };
+        }));
+      });
+      const arr = resp.attachments || [];
+      if (arr.length) {
+        const uploaded = arr[0];
+        setMessages((prev) => prev.map(m => {
+          if (String(m.clientId || m.id) !== String(messageKey)) return m;
+          const atts = (m.attachments || []).slice();
+          if (atts[attIndex]) atts[attIndex] = { ...uploaded, _uploading: false };
+          // If all attachments uploaded now and not yet emitted, emit
+          const allUploaded = atts.every(a => a && !a._uploading && !a._error && (a.secure_url || a.url));
+          if (allUploaded && !m._emitted) {
+            try { socketRef.current?.emit('send_message', { to: otherId, text: m.text || '', attachments: atts, clientId: m.clientId }); } catch {}
+            return { ...m, attachments: atts, _emitted: true };
+          }
+          return { ...m, attachments: atts };
+        }));
+      }
+    } catch (err) {
+      setMessages((prev) => prev.map(m => {
+        if (String(m.clientId || m.id) !== String(messageKey)) return m;
+        const atts = (m.attachments || []).slice();
+        if (atts[attIndex]) atts[attIndex] = { ...atts[attIndex], _uploading: false, _error: true };
+        return { ...m, attachments: atts };
+      }));
+    }
   };
 
   const groups = useMemo(() => {
@@ -805,10 +1199,21 @@ export default function ConversationPage({ params }) {
                   <Message
                     mine={g.m.mine}
                     text={g.m.text}
+                    attachments={g.m.attachments}
                     time={g.m.isLastInGroup ? new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(g.m.ts) : ""}
                     compact={compact}
                     tail={g.m.isLastInGroup}
                     status={g.m.status}
+                    msgKey={g.m.clientId || g.m.id}
+                    onRetryAttachment={retryUploadAttachment}
+                    onOpenLightbox={(url, imgs = [], idx = 0) => { 
+                      setLightboxImages(imgs && imgs.length ? imgs : [url]); 
+                      setLightboxIndex(idx || 0); 
+                      setLightboxUrl(url); 
+                      setLightboxZoom(1);
+                      setLightboxLoading(false);
+                      setLightboxOpen(true); 
+                    }}
                     onRetry={g.m.mine && g.m.status === 'failed' ? () => retryMessage(g.m) : undefined}
                   />
                 </motion.div>
@@ -848,24 +1253,36 @@ export default function ConversationPage({ params }) {
             className="flex items-end gap-2 sm:gap-3"
           >
             <div className="flex-1 relative">
-            <AutoGrowTextarea
-              value={input}
-              onChange={handleInputChange}
-              placeholder="Type a message..."
-              onSend={send}
-              onBlur={() => {
-                if (socketRef.current && otherId) {
-                  socketRef.current.emit('typing', { to: otherId, isTyping: false });
-                }
-              }}
-              inputRef={composerRef}
-            />
-            {showEmojiPicker && (
-              <div className="absolute bottom-full mb-2 right-0 z-20">
-                <EmojiPicker onEmojiClick={(emojiData) => { setInput((prev) => `${prev}${emojiData.emoji}`); }} />
-              </div>
-            )}
-          </div>
+              <AutoGrowTextarea
+                value={input}
+                onChange={handleInputChange}
+                placeholder="Type a message..."
+                onSend={send}
+                onBlur={() => {
+                  if (socketRef.current && otherId) {
+                    socketRef.current.emit('typing', { to: otherId, isTyping: false });
+                  }
+                }}
+                inputRef={composerRef}
+              />
+              {showEmojiPicker && (
+                <div className="absolute bottom-full mb-2 right-0 z-20">
+                  <EmojiPicker onEmojiClick={(emojiData) => { setInput((prev) => `${prev}${emojiData.emoji}`); }} />
+                </div>
+              )}
+            </div>
+            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFilesSelected} />
+            <Button
+              type="button"
+              size="icon"
+              onClick={onPickFiles}
+              className={`h-11 w-11 sm:h-12 sm:w-12 p-0 rounded-full border ${uploading ? 'opacity-60' : ''}`}
+              disabled={uploading}
+              aria-label="Attach files"
+              title={uploading ? 'Uploading…' : 'Attach files'}
+            >
+              <Paperclip className="h-5 w-5" />
+            </Button>
             <Button
               type="submit"
               size="icon"
@@ -898,6 +1315,202 @@ export default function ConversationPage({ params }) {
             </Button>
           </motion.div>
         )}
+
+        {/* Enhanced Lightbox */}
+        <AnimatePresence>
+          {lightboxOpen && (
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+              onClick={() => setLightboxOpen(false)}
+            >
+              {/* Top Controls */}
+              <motion.div 
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: showLightboxControls ? 1 : 0, y: showLightboxControls ? 0 : -20 }}
+                transition={{ duration: 0.2 }}
+                className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 bg-gradient-to-b from-black/50 to-transparent"
+              >
+                <div className="flex items-center gap-4 text-white">
+                  {lightboxImages.length > 1 && (
+                    <span className="text-sm bg-black/30 px-3 py-1 rounded-full">
+                      {lightboxIndex + 1} / {lightboxImages.length}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button 
+                    type="button" 
+                    onClick={(e) => { e.stopPropagation(); window.open(lightboxUrl, '_blank'); }} 
+                    className="text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition-colors"
+                    title="Download"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setLightboxOpen(false)} 
+                    className="text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition-colors"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </motion.div>
+
+              {/* Navigation Arrows */}
+              {lightboxImages.length > 1 && (
+                <>
+                  <motion.button 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: showLightboxControls ? 1 : 0, x: showLightboxControls ? 0 : -20 }}
+                    transition={{ duration: 0.2 }}
+                    type="button" 
+                    className="absolute left-4 md:left-8 text-white/90 bg-white/10 hover:bg-white/20 rounded-full p-3 transition-all hover:scale-110" 
+                    onClick={(e) => { e.stopPropagation(); navigateLightbox(-1); }}
+                  >
+                    <ChevronLeft className="h-6 w-6" />
+                  </motion.button>
+                  <motion.button 
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: showLightboxControls ? 1 : 0, x: showLightboxControls ? 0 : 20 }}
+                    transition={{ duration: 0.2 }}
+                    type="button" 
+                    className="absolute right-4 md:right-8 text-white/90 bg-white/10 hover:bg-white/20 rounded-full p-3 transition-all hover:scale-110" 
+                    onClick={(e) => { e.stopPropagation(); navigateLightbox(1); }}
+                  >
+                    <ChevronRight className="h-6 w-6" />
+                  </motion.button>
+                </>
+              )}
+
+              {/* Thumbnail Strip */}
+              {lightboxImages.length > 1 && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: showLightboxControls ? 1 : 0, y: showLightboxControls ? 0 : 20 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute bottom-16 left-1/2 transform -translate-x-1/2 z-10"
+                >
+                  <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-lg p-2 max-w-[90vw] overflow-x-auto scrollbar-hide">
+                    {lightboxImages.map((imgUrl, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLightboxLoading(true);
+                          setLightboxZoom(1);
+                          setLightboxIndex(idx);
+                          setLightboxUrl(imgUrl);
+                          setTimeout(() => setLightboxLoading(false), 150);
+                        }}
+                        className={`relative flex-shrink-0 w-12 h-12 rounded-md overflow-hidden border-2 transition-all hover:scale-110 ${
+                          idx === lightboxIndex 
+                            ? 'border-white shadow-lg' 
+                            : 'border-white/30 hover:border-white/60'
+                        }`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img 
+                          src={imgUrl} 
+                          alt={`Thumbnail ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                          draggable={false}
+                        />
+                        {idx === lightboxIndex && (
+                          <div className="absolute inset-0 bg-white/20" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Bottom Controls */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: showLightboxControls ? 1 : 0, y: showLightboxControls ? 0 : 20 }}
+                transition={{ duration: 0.2 }}
+                className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-center p-4 bg-gradient-to-t from-black/50 to-transparent"
+              >
+                <div className="flex items-center gap-2 bg-black/30 rounded-full px-4 py-2">
+                  <button 
+                    type="button" 
+                    onClick={(e) => { e.stopPropagation(); setLightboxZoom(z => Math.max(z / 1.2, 0.5)); }} 
+                    className="text-white/80 hover:text-white p-1 transition-colors"
+                    title="Zoom Out (-)"
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </button>
+                  <span className="text-white/80 text-sm min-w-[3rem] text-center">
+                    {Math.round(lightboxZoom * 100)}%
+                  </span>
+                  <button 
+                    type="button" 
+                    onClick={(e) => { e.stopPropagation(); setLightboxZoom(z => Math.min(z * 1.2, 3)); }} 
+                    className="text-white/80 hover:text-white p-1 transition-colors"
+                    title="Zoom In (+)"
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={(e) => { e.stopPropagation(); setLightboxZoom(1); }} 
+                    className="text-white/80 hover:text-white p-1 transition-colors"
+                    title="Reset Zoom (0)"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </button>
+                </div>
+              </motion.div>
+
+              {/* Keyboard Shortcuts Hint */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: showLightboxControls ? 0.7 : 0 }}
+                transition={{ duration: 0.2, delay: 0.5 }}
+                className={`absolute right-4 text-white/60 text-xs bg-black/20 rounded px-2 py-1 ${
+                  lightboxImages.length > 1 ? 'bottom-32' : 'bottom-20'
+                }`}
+              >
+                ← → Space: Navigate • +/- : Zoom • 0: Reset • Esc: Close
+              </motion.div>
+
+              {/* Main Image Container */}
+              <motion.div 
+                key={lightboxIndex}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="relative max-w-[95vw] max-h-[95vh] flex items-center justify-center"
+                onClick={(e) => e.stopPropagation()}
+                style={{ 
+                  transform: `scale(${lightboxZoom})`,
+                  transition: 'transform 0.2s ease-out'
+                }}
+              >
+                {lightboxLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-lg">
+                    <div className="h-8 w-8 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img 
+                  src={lightboxUrl || ''} 
+                  alt="preview" 
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl select-none"
+                  draggable={false}
+                  onLoad={() => setLightboxLoading(false)}
+                  onError={() => setLightboxLoading(false)}
+                />
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Call UI */}
         {callState && (
